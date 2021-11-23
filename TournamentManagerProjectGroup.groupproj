@@ -1,0 +1,48 @@
+﻿<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <PropertyGroup>
+        <ProjectGuid>{0D426BDB-4D37-420D-BEA4-6915E63D848B}</ProjectGuid>
+    </PropertyGroup>
+    <ItemGroup>
+        <Projects Include="TournamentManager.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="Tests\TournamentManagerTests.dproj">
+            <Dependencies/>
+        </Projects>
+    </ItemGroup>
+    <ProjectExtensions>
+        <Borland.Personality>Default.Personality.12</Borland.Personality>
+        <Borland.ProjectType/>
+        <BorlandProject>
+            <Default.Personality/>
+        </BorlandProject>
+    </ProjectExtensions>
+    <Target Name="TournamentManager">
+        <MSBuild Projects="TournamentManager.dproj"/>
+    </Target>
+    <Target Name="TournamentManager:Clean">
+        <MSBuild Projects="TournamentManager.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="TournamentManager:Make">
+        <MSBuild Projects="TournamentManager.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="TournamentManagerTests">
+        <MSBuild Projects="Tests\TournamentManagerTests.dproj"/>
+    </Target>
+    <Target Name="TournamentManagerTests:Clean">
+        <MSBuild Projects="Tests\TournamentManagerTests.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="TournamentManagerTests:Make">
+        <MSBuild Projects="Tests\TournamentManagerTests.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="Build">
+        <CallTarget Targets="TournamentManager;TournamentManagerTests"/>
+    </Target>
+    <Target Name="Clean">
+        <CallTarget Targets="TournamentManager:Clean;TournamentManagerTests:Clean"/>
+    </Target>
+    <Target Name="Make">
+        <CallTarget Targets="TournamentManager:Make;TournamentManagerTests:Make"/>
+    </Target>
+    <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
+</Project>

@@ -1,0 +1,10 @@
++ sélectionner les classements par ordre croissant
++ pour chaque classement, placer les joueurs sur les prochaines positions libres
+  + sélectionner les clubs ayant des joueurs de ce classement triés par nombre de joueurs classés par ordre décroissant
+    + pour chaque joueur du club
+      + placer le joueur
+           $ calculer la place du joueur 
+             = si le joueur est tds, c'est fait ! 1,2,3,4
+             = le jour est placé dans le demi-tableau opposé au joueur précédent du club
+             = il est placé au premier emplacement libre en tenant compte de sa place dans le classement des joueurs du classement
+           $ update numseq & numcel

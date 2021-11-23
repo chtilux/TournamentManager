@@ -1,0 +1,52 @@
+analyse game
+@input game,score,player1,player2,playArea
+@returns game status
+
+a game is over when :
+  1. one player is disqualified
+        -> winner is qualified
+        -> loser is WO
+        -> score is WO
+        -> game status is over
+        -> play area is available
+        
+  2. the game is played :
+        -> the score is ok
+        -> winner is qualified
+        -> loser is disqualified
+        -> loser is umpire
+        -> play area is available
+        -> score is score
+        
+  3. the score is ok if :
+        -> minimum setsToWin is played
+        -> maximum 2*setsToWin-1 is played
+        -> points of a player for win a set is minimum 0, maximum 11 when loser points are maximum 9
+                                                          or maximum loser points plus 2
+        -> points for a player to lose a set is minimum 0, maximum 9 when winner points is 11
+                                                           or maximum winner points minus 2
+        -> winner has setsToWin sets won
+        -> loser has maximum setsToWin minus 1 won 
+        
+        
+        
+analyse dbgrid columns width
+  dbgrid.width - bordersize
+               - vscrollwidth
+              (- vlinewidth * colcount)
+               - column.0.width
+               -column.2.width
+  div 2 = column.1 & column.2 .width
+
+version 1.50
+
+version 1.60
+  nettoyer la base de code
+
+version 2.00
+  version numbering with double data variable
+  database ddl to database
+  database network access
+  use rules
+  display play areas informations
+  zoom sur l'arbre

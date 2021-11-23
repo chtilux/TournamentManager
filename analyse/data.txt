@@ -1,0 +1,32 @@
+création de tournoi datés
+  saison
+  date du tournoi
+  club organisateur
+  libellé du tournoi
+  nombre de catégories max par participant
+  catégories d'âges
+  classements et handicaps
+
+création des catégories d'un tournoi
+  code catégorie
+  heure de début
+  double
+  handicap
+  classements et catégories d'âges autorisés (* = tous et toutes)
+  nombre de sets gagnants
+
+importation des participants par fichier excel
+  sélection du fichier
+  insertion d'un participant (licence,nom,club,classement actuel,top classement saison, top classement demie saison, date de naissance, ranglëscht)
+  insertion d'un participant dans une catégorie (vérification classement, âge, nombre de catégories)
+
+listage des participants et des clubs
+  liste des participants (licence,nom,classement,club,catégories,catégorie d'âge)
+  liste des clubs (code,nom,participants,catégories)
+
+création du tableau d'une catégorie
+  sélection des têtes de série
+    --> résultats des tournois des 6 semaines précédentes (points et nombre de places)
+    --> classement ranglëscht
+  génération automatique
+  génération manuelle

@@ -1,0 +1,25 @@
+Menu principal
+
+1.0 Fichier
+    1.1 Nouveau tournoi (Ctrl+N)
+    1.2 Ouvrir tournoi (Ctrl+O)
+    1.3 Backup
+    1.4 Base de données
+        1.4.1 Nouvelles base de données
+        1.4.2 Ouvrir une base de données
+    1.9 Quitter (Ctrl+Q)
+
+2.0 Paramètres
+    2.1 Clubs
+    2.2 Classements
+    2.3 Catégories d'âge
+    2.4 Handicap
+    2.5 Valeurs par défaut
+
+A l'ouverture du programme :
+  -> Lire le fichier de configuration
+  -> Si aucun paramètres de connexion LOGIN/PASSWORD
+     -> saisir les paramètres de connexion
+  -> Si aucune base de données n'est inscrite ou si la base de données n'est pas disponible
+     -> créer une nouvelle base de données OU sélectionner une base de données existante
+  -> Ouvrir la base de données
