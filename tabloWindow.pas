@@ -44,7 +44,7 @@ type
     Placer1: TMenuItem;
     procedure FormShow(Sender: TObject);
     procedure tabloGridCellClick(Column: TColumn);
-    procedure tabloGridDrawColumnCell(Sender: TObject; const {$ifdef VER330 or higher}[Ref]{$endif} Rect: TRect;
+    procedure tabloGridDrawColumnCell(Sender: TObject; const Rect: TRect;
       DataCol: Integer; Column: TColumn; AState: TGridDrawState);
     procedure excelButtonClick(Sender: TObject);
     procedure swapActionExecute(Sender: TObject);
@@ -329,7 +329,7 @@ begin
 end;
 
 procedure TtabloW.tabloGridDrawColumnCell(Sender: TObject;
-  const [Ref] Rect: TRect; DataCol: Integer; Column: TColumn;
+  const Rect: TRect; DataCol: Integer; Column: TColumn;
   AState: TGridDrawState);
 const
 //  cl: array[boolean] of TColor = (clWhite, clSilver);

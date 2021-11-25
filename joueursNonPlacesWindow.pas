@@ -24,7 +24,7 @@ type
     PopupMenu1: TPopupMenu;
     Placer1: TMenuItem;
     procedure positionsGridDrawColumnCell(Sender: TObject;
-      const {$ifdef VER330 or higher}[Ref]{$endif} Rect: TRect; DataCol: Integer; Column: TColumn;
+      const Rect: TRect; DataCol: Integer; Column: TColumn;
       State: TGridDrawState);
     procedure positionsGridCellClick(Column: TColumn);
     procedure placeActionExecute(Sender: TObject);
@@ -134,7 +134,7 @@ begin
 end;
 
 procedure TjoueursNonPlacesW.positionsGridDrawColumnCell(Sender: TObject;
-  const [Ref] Rect: TRect; DataCol: Integer; Column: TColumn;
+  const Rect: TRect; DataCol: Integer; Column: TColumn;
   State: TGridDrawState);
 begin
   with positionsGrid,positionsGrid.Canvas do

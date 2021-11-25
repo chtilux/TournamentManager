@@ -447,16 +447,11 @@ end;
 function TGroupContent.GetDisplayRight(const dlp: TDisplayListPos): string;
 var
   lst: TStrings;
-  {$ifdef VER260}
   i: integer;
-  {$endif}
 begin
   Result := '';
   lst := (AsObject as TGroupContent).Groupe.PlayersList;
   try
-    {$ifdef ver330 or higher}
-    var i: integer;
-    {$endif}
     { boucle commence à 1 pour éviter le crlf en début de string }
     for i := 1 to Pred(lst.Count) do
       Result := Format('%s'+#13#10+'%s',[Result,lst[i]]);

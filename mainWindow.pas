@@ -612,9 +612,7 @@ var
   xsql: TStrings;
   s: string;
   col: TTableColumnDef;
-  {$ifdef VER260}
-  i: integer;
-  {$endif}
+  i: Integer;
   procedure runSQL(sql: string); overload;
   begin
     if Trim(sql) = '' then Exit;
@@ -645,9 +643,7 @@ var
     EnumName: TSymbolName;
     Data: PTypeData;
     z: TZReadOnlyQuery;
-    {$ifdef VER260}
-      var i: integer;
-    {$endif}
+    var i: integer;
   begin
     EnumName := enum.Name;
     Data := enum.TypeData;
@@ -658,9 +654,6 @@ var
                +' VALUES (:cledic,:coddic,:pardc1)');
       z.Prepare;
       z.ParamByName('cledic').AsString := string(EnumName);
-      {$ifdef VER330}
-      var i: integer;
-      {$endif}
       for i := Data.MinValue to Data.MaxValue do
       begin
         z.ParamByName('coddic').AsString := GetEnumName(enum, i);
@@ -1277,9 +1270,6 @@ begin
         AddSeekConfig(TypeInfo(TPlayAreaStatus));
         AddSeekConfig(TypeInfo(TRegistrationStatus));
         AddSeekConfig(TypeInfo(TFirstRoundMode));
-        {$ifdef ver330 or higher}
-        var i: integer;
-        {$endif}
         i := -1;
         RunSQL('SELECT MAX(id) id FROM seek_config','id',i);
         if i > -1 then

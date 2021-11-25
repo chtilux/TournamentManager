@@ -4,6 +4,11 @@ program TournamentManagerTests;
 {$APPTYPE CONSOLE}
 {$ENDIF}{$STRONGLINKTYPES ON}
 uses
+  madExcept,
+  madLinkDisAsm,
+  madListHardware,
+  madListProcesses,
+  madListModules,
   System.SysUtils,
   {$IFDEF TESTINSIGHT}
   TestInsight.DUnitX,
