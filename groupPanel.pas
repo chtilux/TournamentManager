@@ -547,6 +547,21 @@ begin
         Params[1].AsInteger := data2.sergrp;
         Params[2].AsInteger := data2.serjou;
         ExecSQL;
+
+        SQL.Clear;
+        SQL.Add('UPDATE prptab'
+               +' SET sergrp = :sergrp'
+               +' WHERE sergrp = :old_sergrp'
+               +'   AND serjou = :serjou');
+        Params[0].AsInteger := data2.sergrp;
+        Params[1].AsInteger := data1.sergrp;
+        Params[2].AsInteger := data1.serjou;
+        ExecSQL;
+        Params[0].AsInteger := data1.sergrp;
+        Params[1].AsInteger := data2.sergrp;
+        Params[2].AsInteger := data2.serjou;
+        ExecSQL;
+
         cnx.commit;
       except
         on E:Exception do

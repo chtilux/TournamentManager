@@ -318,7 +318,7 @@ inherited tournamentW: TtournamentW
       Top = 4
       Width = 1052
       Height = 525
-      ActivePage = catSheet
+      ActivePage = tabSheet
       Align = alClient
       TabOrder = 0
       OnChange = pgChange

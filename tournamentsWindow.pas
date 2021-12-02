@@ -16,6 +16,7 @@ type
     procedure DBGrid1DrawColumnCell(Sender: TObject; const Rect: TRect;
       DataCol: Integer; Column: TColumn; State: TGridDrawState);
   private
+    procedure BeforeDelete(Dataset: TDataset);
     { Déclarations privées }
   public
     { Déclarations publiques }
@@ -26,7 +27,7 @@ implementation
 {$R *.dfm}
 
 uses
-  lal_utils;
+  lal_utils, tmUtils15;
 
 procedure TtournamentsW.FormCreate(Sender: TObject);
 begin
@@ -34,7 +35,14 @@ begin
   pvData.SQL.Add('select sertrn,saison,dattrn,organisateur,libelle'
                +' from tournoi'
                +' order by saison desc,dattrn desc');
+  pvData.BeforeDelete := BeforeDelete;
   pvData.Open;
+end;
+
+procedure TTournamentsW.BeforeDelete(Dataset: TDataset);
+begin
+  deleteTournament(pvData.FieldByName('sertrn').AsInteger);
+  Abort;
 end;
 
 procedure TtournamentsW.DBGrid1DrawColumnCell(Sender: TObject;

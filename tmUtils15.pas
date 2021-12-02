@@ -931,6 +931,7 @@ begin
         Next;
       end;
       Close;
+
     finally
       Free;
     end;

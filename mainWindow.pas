@@ -237,7 +237,7 @@ var
   sertrn: integer;
 begin
   sertrn := 0;
-  if MessageDlg('Annulez-vous la suppression d''un tournoi ?', mtWarning, [mbYes,mbNo], 0) = mrNo then
+  if MessageDlg('Confirmez-vous la suppression d''un tournoi ?', mtWarning, [mbYes,mbNo], 0, mbNo) = mrYes then
   begin
     sel := TtournamentsW.Create(nil,pvFIB);
     try

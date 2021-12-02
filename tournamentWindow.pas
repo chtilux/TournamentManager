@@ -494,6 +494,7 @@ begin
   _tournament := getQuery(pvCnx, Self);
   _tournament.SQL.Add('SELECT sertrn,saison,dattrn,codclb,organisateur,libelle,maxcat,codcls,expcol,numtbl,first_round_mode'
                      +' ,(SELECT coalesce(COUNT( * ),0) FROM insc WHERE sertrn = :sertrn) inscriptions'
+                     +' ,first_round_mode mode'
                      +' FROM tournoi'
                      +' WHERE sertrn = :sertrn');
   _tournament.Prepare;
@@ -533,19 +534,33 @@ begin
   clscatSource.Dataset := _clscat;
 
   _insc := getQuery(pvCnx, Self);
-  _insc.SQL.Add('SELECT  b.licence,b.nomjou,b.codcls,d.numseq+coalesce(e.numseq,0)seqcls,b.topcls,b.topdem,a.datinsc,b.codclb,k.libclb'
-               +'       ,c.licence licptn,c.nomjou nomptn,c.codcls clsptn,c.codclb clbptn,q.libclb libclbptn'
-               +'       ,b.vrbrgl+coalesce(c.vrbrgl,0)vrbrgl,a.serinsc,b.serjou,a.statut'
-               +' FROM insc a LEFT OUTER JOIN joueur c ON (a.serptn = c.SERJOU AND c.saison = :saison)'
-               +'     ,joueur b,classement d LEFT OUTER JOIN classement e ON c.codcls = e.codcls'
-               +'     ,club k LEFT OUTER JOIN club q ON c.codclb = q.CODCLB'
-               +' WHERE a.sertrn = :sertrn'
-               +'   and a.sercat = :sercat'
-               +'   and a.serjou = b.serjou'
-               +'   and b.codcls = d.codcls'
-               +'   and b.codclb = k.codclb'
-               +'   and b.saison = :saison'
-               +' order by seqcls,vrbrgl');
+  { 02.12.2021 : réécrit pour firebird 4.0 }
+  _insc.SQL.Add('SELECT'
+               +' 	 j1.LICENCE ,j1.NOMJOU ,j1.CODCLS ,c1.NUMSEQ +coalesce(c2.NUMSEQ,0) seqcls,j1.TOPCLS ,j1.TOPDEM ,a.DATINSC ,j1.CODCLB,cb1.LIBCLB'
+               +' 	,j2.LICENCE ,j2.NOMJOU ,j2.CODCLS ,COALESCE(c2.NUMSEQ,0) +c1.NUMSEQ seqcls,j2.TOPCLS ,j2.TOPDEM ,a.DATINSC ,j2.CODCLB,cb2.LIBCLB libclbptn'
+               +'   ,j1.VRBRGL + coalesce(j2.VRBRGL,0) vrbrgl,a.SERINSC ,j1.SERJOU ,a.STATUT'
+               +' 	FROM insc a'
+               +' 		LEFT JOIN JOUEUR j1 ON a.SERJOU = j1.SERJOU'
+               +' 			LEFT JOIN CLASSEMENT c1 ON c1.CODCLS =  j1.CODCLS'
+               +' 			LEFT JOIN club cb1 ON cb1.CODCLB = j1.CODCLB'
+               +' 		LEFT JOIN joueur j2 ON a.SERPTN = j2.SERJOU'
+               +' 			LEFT JOIN CLASSEMENT c2 ON c2.CODCLS =  j2.CODCLS'
+               +' 			LEFT JOIN club cb2 ON cb2.CODCLB = j2.CODCLB'
+               +' WHERE a.SERTRN = :sertrn');
+
+//  _insc.SQL.Add('SELECT  b.licence,b.nomjou,b.codcls,d.numseq+coalesce(e.numseq,0)seqcls,b.topcls,b.topdem,a.datinsc,b.codclb,k.libclb'
+//               +'       ,c.licence licptn,c.nomjou nomptn,c.codcls clsptn,c.codclb clbptn,q.libclb libclbptn'
+//               +'       ,b.vrbrgl+coalesce(c.vrbrgl,0)vrbrgl,a.serinsc,b.serjou,a.statut'
+//               +' FROM insc a LEFT OUTER JOIN joueur c ON (a.serptn = c.SERJOU AND c.saison = :saison)'
+//               +'     ,joueur b,classement d LEFT OUTER JOIN classement e ON c.codcls = e.codcls'
+//               +'     ,club k LEFT OUTER JOIN club q ON c.codclb = q.CODCLB'
+//               +' WHERE a.sertrn = :sertrn'
+//               +'   and a.sercat = :sercat'
+//               +'   and a.serjou = b.serjou'
+//               +'   and b.codcls = d.codcls'
+//               +'   and b.codclb = k.codclb'
+//               +'   and b.saison = :saison'
+//               +' order by seqcls,vrbrgl');
   _insc.Prepare;
   _insc.DataSource := catSource;
   _insc.BeforeDelete := beforeDelete;
@@ -1204,7 +1219,7 @@ begin
       FieldByName('numset').AsString := getDefValue('categories','numset','3');
       FieldByName('catage').AsString := getDefValue('categories','catage','0');
       FieldByName('first_round_mode').AsInteger := _tournament.FieldByName('first_round_mode').AsInteger;
-      FieldByName('phase').AsInteger := FieldByName('first_round_mode').AsInteger;
+      FieldByName('phase').AsInteger := _tournament.FieldByName('mode').AsInteger;
     end;
   end
   else if Dataset = _clscat then
@@ -2961,9 +2976,9 @@ begin
     inscat := getROQuery(pvCnx);
     inscat.SQL.Add('INSERT INTO categories (sercat,sertrn,saison,codcat,heudeb'
                   +'                       ,simple,handicap,numset,catage,stacat'
-                  +'                       ,first_round_mode,parent)'
+                  +'                       ,first_round_mode,parent,phase)'
                   +' VALUES '
-                  +Format('(:sercat,%d,%d,:codcat,%s,:simple,%s,3,%s,0,%d,0)',[_tournament.FieldByName('sertrn').AsInteger,_tournament.FieldByName('saison').AsInteger,QuotedStr('08:00'),QuotedStr('0'),QuotedStr('0'),_tournament.FieldByName('first_round_mode').AsInteger]));
+                  +Format('(:sercat,%d,%d,:codcat,%s,:simple,%s,3,%s,0,%d,0,%s)',[_tournament.FieldByName('sertrn').AsInteger,_tournament.FieldByName('saison').AsInteger,QuotedStr('08:00'),QuotedStr('0'),QuotedStr('0'),_tournament.FieldByName('first_round_mode').AsInteger,_tournament.FieldByName('mode').AsString]));
     insc := getROQuery(pvCnx);
     insc.SQL.Add('INSERT INTO insc (serinsc,sercat,datinsc,simple,serjou,serptn,statut,sertrn)'
                 +' VALUES '
@@ -3848,19 +3863,32 @@ begin
         z.ParamByName('sertab').AsInteger := sertab;
         z.ParamByName('sertrn').AsInteger := _tab.FieldByName('sertrn').AsInteger;
 
-        x.SQL.Add('SELECT  b.serjou,b.licence,b.nomjou,b.codcls,d.numseq+coalesce(e.numseq,0)seqcls,b.topcls,b.topdem,b.vrbrgl ranglescht,a.datinsc,b.codclb,k.libclb'
-                 +'       ,coalesce(c.serjou,0) serptn,c.licence licptn,c.nomjou nomptn,c.codcls clsptn,c.codclb clbptn,q.libclb libclbptn'
-                 +'       ,b.vrbrgl+coalesce(c.vrbrgl,0)vrbrgl'
-                 +' FROM insc a LEFT OUTER JOIN joueur c ON (a.serptn = c.SERJOU AND c.saison = :saison)'
-                 +'     ,joueur b,classement d LEFT OUTER JOIN classement e ON c.codcls = e.codcls'
-                 +'     ,club k LEFT OUTER JOIN club q ON c.codclb = q.CODCLB'
-                 +' WHERE a.sercat = :sercat'
-                 +'   and a.serjou = b.serjou'
-                 +'   and b.codcls = d.codcls'
-                 +'   and b.codclb = k.codclb'
-                 +'   and b.saison = :saison'
-                 //+'   and a.statut = ' + IntToStr(Ord(isQualifie))
-                 +' order by seqcls,vrbrgl,codcls,ranglescht');
+//        x.SQL.Add('SELECT  b.serjou,b.licence,b.nomjou,b.codcls,d.numseq+coalesce(e.numseq,0)seqcls,b.topcls,b.topdem,b.vrbrgl ranglescht,a.datinsc,b.codclb,k.libclb'
+//                 +'       ,coalesce(c.serjou,0) serptn,c.licence licptn,c.nomjou nomptn,c.codcls clsptn,c.codclb clbptn,q.libclb libclbptn'
+//                 +'       ,b.vrbrgl+coalesce(c.vrbrgl,0)vrbrgl'
+//                 +' FROM insc a LEFT OUTER JOIN joueur c ON (a.serptn = c.SERJOU AND c.saison = :saison)'
+//                 +'     ,joueur b,classement d LEFT OUTER JOIN classement e ON c.codcls = e.codcls'
+//                 +'     ,club k LEFT OUTER JOIN club q ON c.codclb = q.CODCLB'
+//                 +' WHERE a.sercat = :sercat'
+//                 +'   and a.serjou = b.serjou'
+//                 +'   and b.codcls = d.codcls'
+//                 +'   and b.codclb = k.codclb'
+//                 +'   and b.saison = :saison'
+//                 //+'   and a.statut = ' + IntToStr(Ord(isQualifie))
+//                 +' order by seqcls,vrbrgl,codcls,ranglescht');
+        x.SQL.Add('SELECT'
+                     +' 	 j1.LICENCE ,j1.NOMJOU ,j1.CODCLS ,c1.NUMSEQ +coalesce(c2.NUMSEQ,0) seqcls,j1.TOPCLS ,j1.TOPDEM ,a.DATINSC ,j1.CODCLB,cb1.LIBCLB,j1.vrbrgl ranglescht'
+                     +' 	,COALESCE(j2.serjou,0) serptn,j2.LICENCE licptn,j2.NOMJOU nomptn,j2.CODCLS clsptn,j2.CODCLB clbptn,cb2.LIBCLB libclbptn'
+                     +'   ,j1.VRBRGL + coalesce(j2.VRBRGL,0) vrbrgl,a.SERINSC ,j1.SERJOU ,a.STATUT'
+                     +' 	FROM insc a'
+                     +' 		LEFT JOIN JOUEUR j1 ON a.SERJOU = j1.SERJOU'
+                     +' 			LEFT JOIN CLASSEMENT c1 ON c1.CODCLS =  j1.CODCLS'
+                     +' 			LEFT JOIN club cb1 ON cb1.CODCLB = j1.CODCLB'
+                     +' 		LEFT JOIN joueur j2 ON a.SERPTN = j2.SERJOU'
+                     +' 			LEFT JOIN CLASSEMENT c2 ON c2.CODCLS =  j2.CODCLS'
+                     +' 			LEFT JOIN club cb2 ON cb2.CODCLB = j2.CODCLB'
+                     +' WHERE a.sercat = :sercat'
+                     +' ORDER BY seqcls,vrbrgl,codcls,ranglescht');
 
         x.DataSource := catSource;
         Screen.Cursor := crSQLWait;
@@ -3923,7 +3951,7 @@ begin
         end;
         { maj de categories.stacat }
         CheckAndSetCategorieStatusAfterUpdate(sertab);
-        //stacat(sertab,csPrepared);
+//        stacat(sertab,csPrepared);
         pvCnx.commit;
         //catSource.DataSet.Refresh;
         catSource.DataSet.Locate('sercat',sertab,[]);
