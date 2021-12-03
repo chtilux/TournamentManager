@@ -56,6 +56,8 @@ type
     Dictionnaire1: TMenuItem;
     SeekConfigsAction: TAction;
     SeekConfigs1: TMenuItem;
+    SaveToFileAction: TAction;
+    Savetofile1: TMenuItem;
     procedure Quitter1Click(Sender: TObject);
     procedure FormCreate(Sender: TObject);
     procedure FormDestroy(Sender: TObject);
@@ -80,6 +82,7 @@ type
     procedure dictActionExecute(Sender: TObject);
     procedure SeekConfigsActionExecute(Sender: TObject);
     procedure ActionList1Update(Action: TBasicAction; var Handled: Boolean);
+    procedure SaveToFileActionExecute(Sender: TObject);
   private
     { Déclarations privées }
     _user,
@@ -96,6 +99,11 @@ type
     function makeVersion(const version: double): boolean; overload;
     procedure dbInfos;
     procedure colorsChanged(var Message: TMessage); message wm_colorsChanged;
+    procedure LoadSettingsFromText(var Values: TStrings);
+    function getSettingsValue(const setting, default: string): string;
+    procedure setSettingsValue(const setting, value: string);
+    procedure SaveSettingsToFile(const SettingsValues: TStrings;
+      const Filename: TFilename);
   public
     { Déclarations publiques }
     property cnx: TLalConnection read pvCnx;
@@ -130,7 +138,7 @@ var
   f: string;
 begin
   Result := False;
-{$ifdef VER330}
+//{$ifdef VER330 or HIGHER}
   s:= 'c:\work\styles\';
   if DirectoryExists(s) then
   begin
@@ -143,7 +151,7 @@ begin
       end;
     end;
   end;
-{$endif}
+//{$endif}
 end;
 
 procedure TmainW.catageActionExecute(Sender: TObject);
@@ -215,7 +223,8 @@ begin
   if pvCnx.get <> nil then
   begin
     sb.Panels[2].Text := Format('%s (%f)', [pvCnx.get.Database, pvVersion]);
-    sb.Panels[3].Text := Format('user : %s, owner : %s',[pvCnx.get.User,Lowercase(pvCnx.owner)]);
+    sb.Panels[3].Text := glSettings.WorkingDirectory;
+    sb.Panels[4].Text := Format('user : %s, owner : %s',[pvCnx.get.User,Lowercase(pvCnx.owner)]);
   end;
 end;
 
@@ -298,6 +307,7 @@ procedure TmainW.FormCreate(Sender: TObject);
 begin
   pvFIB := TZConnection.Create(Self);
   pvCnx := TLalConnection.Create(Self,pvFIB);
+  LoadSettingsFromText(glSettingsValues);
   if buildStyles then
   begin
     try
@@ -313,9 +323,43 @@ begin
   end;
 end;
 
-procedure TmainW.FormDestroy(Sender: TObject);
+procedure TMainW.LoadSettingsFromText(var Values: TStrings);
+var
+  Filename: TFilename;
 begin
+  Filename := ChangeFileExt(Application.ExeName,'.settings');
+  if FileExists(Filename) then
+    Values.LoadFromFile(Filename);
+end;
+
+procedure TmainW.FormDestroy(Sender: TObject);
+var
+  Filename: TFileName;
+begin
+  Filename := ChangeFileExt(Application.ExeName,'.settings');
+  glSettings.Write;
   glSettings.Free;
+end;
+
+procedure TmainW.SaveSettingsToFile(const SettingsValues: TStrings; const Filename: TFilename);
+begin
+  SettingsValues.SaveToFile(Filename);
+end;
+
+procedure TmainW.SaveToFileActionExecute(Sender: TObject);
+begin
+  with TOpenDialog.Create(nil) do
+  begin
+    try
+      InitialDir := ExtractFilePath(ParamStr(0));
+      Filter := 'Settings file (*.settings)|*.settings|All files (*.*)|*.*';
+      FilterIndex := 1;
+      if Execute then
+        glSettings.SaveToFile(FileName);
+    finally
+      Free;
+    end;
+  end;
 end;
 
 procedure TmainW.FormShow(Sender: TObject);
@@ -327,49 +371,50 @@ begin
     openDatabase(filename);
   tmUtils15.setDatabaseLocalConnection(pvCnx);
   initColorsArray;
-  glSettings := TTournamentSettings.Create(pvCnx);
+  glSettings := TTournamentSettings.Create(pvCnx, glSettingsValues);
   glSettings.Read;
   Caption := Format('%s (%s)',[ChangeFileExt(ExtractFilename(Application.ExeName), ''), GetAppVersion]);
+  dbInfos;
 end;
 
 
-function getSettingsValue(const setting, default: string): string;
-var
-  lcSettings: TStrings;
-  filename: string;
-begin
-  Result := '';
-  lcSettings := TStringList.Create;
-  try
-    filename := ChangeFileExt(Application.ExeName,'.settings');
-    if FileExists(filename) then
-    begin
-      lcSettings.LoadFromFile(filename);
-      Result := lcSettings.Values[setting];
-    end;
-    if Result = '' then
-      Result := default;
-  finally
-    lcSettings.Free;
-  end;
-end;
-
-procedure setSettingsValue(const setting, value: string);
-var
-  lcSettings: TStrings;
-  filename: string;
-begin
-  lcSettings := TStringList.Create;
-  try
-    filename := ChangeFileExt(Application.ExeName,'.settings');
-    if FileExists(filename) then
-      lcSettings.LoadFromFile(filename);
-    lcSettings.Values[setting] := Value;
-    lcSettings.SaveToFile(filename);
-  finally
-    lcSettings.Free;
-  end;
-end;
+//function getSettingsValue(const setting, default: string): string;
+//var
+//  lcSettings: TStrings;
+//  filename: string;
+//begin
+//  Result := '';
+//  lcSettings := TStringList.Create;
+//  try
+//    filename := ChangeFileExt(Application.ExeName,'.settings');
+//    if FileExists(filename) then
+//    begin
+//      lcSettings.LoadFromFile(filename);
+//      Result := lcSettings.Values[setting];
+//    end;
+//    if Result = '' then
+//      Result := default;
+//  finally
+//    lcSettings.Free;
+//  end;
+//end;
+//
+//procedure setSettingsValue(const setting, value: string);
+//var
+//  lcSettings: TStrings;
+//  filename: string;
+//begin
+//  lcSettings := TStringList.Create;
+//  try
+//    filename := ChangeFileExt(Application.ExeName,'.settings');
+//    if FileExists(filename) then
+//      lcSettings.LoadFromFile(filename);
+//    lcSettings.Values[setting] := Value;
+//    lcSettings.SaveToFile(filename);
+//  finally
+//    lcSettings.Free;
+//  end;
+//end;
 
 function TmainW.getDatabase: string;
 var
@@ -427,6 +472,48 @@ begin
       end;
     end;
   end;
+end;
+
+function TmainW.getSettingsValue(const setting, default: string): string;
+var
+  lcSettings: TStrings;
+  filename: string;
+begin
+  Result := glSettingsValues.Values[setting];
+  if Result = '' then
+  begin
+    lcSettings := TStringList.Create;
+    try
+      filename := ChangeFileExt(Application.ExeName,'.settings');
+      if FileExists(filename) then
+      begin
+        lcSettings.LoadFromFile(filename);
+        Result := lcSettings.Values[setting];
+      end;
+      if Result = '' then
+        Result := default;
+    finally
+      lcSettings.Free;
+    end;
+  end;
+end;
+
+procedure TmainW.setSettingsValue(const setting, value: string);
+//var
+//  lcSettings: TStrings;
+//  filename: string;
+begin
+  glSettingsValues.Values[setting] := Value;
+//  lcSettings := TStringList.Create;
+//  try
+//    filename := ChangeFileExt(Application.ExeName,'.settings');
+//    if FileExists(filename) then
+//      lcSettings.LoadFromFile(filename);
+//    lcSettings.Values[setting] := Value;
+//    lcSettings.SaveToFile(filename);
+//  finally
+//    lcSettings.Free;
+//  end;
 end;
 
 function TmainW.getVersion: double;
@@ -533,7 +620,6 @@ begin
   end
   else
     dropTempTables(pvCnx);
-  dbInfos;
 end;
 
 procedure TmainW.openDatabaseActionExecute(Sender: TObject);
@@ -1494,6 +1580,13 @@ begin
       RunSQL('ALTER TABLE match           ADD CONSTRAINT fk_match_tableau           FOREIGN KEY (sertab) REFERENCES tableau (sertab)');
       RunSQL('ALTER TABLE prptab          ADD CONSTRAINT fk_prptab_tableau          FOREIGN KEY (sertab) REFERENCES tableau (sertab)');
       RunSQL('ALTER TABLE tablo           ADD CONSTRAINT fk_tablo_tableau           FOREIGN KEY (sertab) REFERENCES tableau (sertab)');
+      updateDatabaseVersion(version,version+1);
+      cnx.commit;
+    end
+    else
+    if version = 17 then
+    begin
+      RunSQL('ALTER TABLE dictionnaire ALTER COLUMN pardc1 TYPE VARCHAR(100)');
       updateDatabaseVersion(version,version+1);
       cnx.commit;
     end;

@@ -39,7 +39,10 @@ object mainW: TmainW
         Width = 300
       end
       item
-        Width = 50
+        Width = 300
+      end
+      item
+        Width = 200
       end>
   end
   object MainMenu1: TMainMenu
@@ -104,6 +107,9 @@ object mainW: TmainW
         end
         object Dictionnaire1: TMenuItem
           Action = dictAction
+        end
+        object Savetofile1: TMenuItem
+          Action = SaveToFileAction
         end
         object settingsMenu: TMenuItem
           Action = settingsAction
@@ -216,6 +222,11 @@ object mainW: TmainW
       Category = 'settings'
       Caption = 'Seek Configs...'
       OnExecute = SeekConfigsActionExecute
+    end
+    object SaveToFileAction: TAction
+      Category = 'settings'
+      Caption = 'Save settings to file...'
+      OnExecute = SaveToFileActionExecute
     end
   end
 end

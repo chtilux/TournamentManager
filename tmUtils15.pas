@@ -34,6 +34,12 @@ type
       cs_firstRoundMode = 'TFirstRoundMode';
 
     function GetSeekCodeFirstRoundMode: string;
+    procedure BuildPathSettings(var Value: string; const Name, Path: string;
+      const Query: TZReadOnlyQuery);
+    procedure BuildTemplateFilenameSettings(var Value: string; const Name,
+      Filename: string; const Query: TZReadOnlyQuery);
+    function GetDrawTemplate: string;
+    function GetGroupTemplate: string;
 
     var
       pvWorkingDirectory: string;
@@ -42,7 +48,9 @@ type
       pvTemplatesDirectory: string;
       pvFLTTResultsDocument: string;
       pvDrawTemplate: string;
+      pvQualificationGroupTemplate: string;
       FSeekConfigs: TStrings;
+      FTextValues: TStrings;
 
     function getWorkingDirectory: string;
     procedure SetWorkingDirectory(const Value: string);
@@ -56,9 +64,6 @@ type
     function getFLTTResultsDocument: string;
     procedure SetFLTTResultsDocument(const Value: string);
     function getFLTTResultsTemplate: string;
-    function getDrawTemplate: string;
-    procedure setDrawTemplate(const Value: string);
-    function getDrawTemplateFile: string;
     procedure SetFirstRoundMode(const Value: TFirstRoundMode);
     function GetFirstRoundMode: TFirstRoundMode;
     function GetSeekCodeSaison: string;
@@ -70,23 +75,24 @@ type
     procedure DoWrite; override;
 
   public
-    constructor Create(cnx: TLalConnection); override;
+    constructor Create(cnx: TLalConnection; TextValues: TStrings); reintroduce; overload;
     destructor Destroy; override;
     property WorkingDirectory: string read getWorkingDirectory write SetWorkingDirectory;
     property TournamentsDirectory: string read getTournamentsDirectory write SetTournamentsDirectory;
     property ExportDirectory: string read getExportDirectory write SetExportDirectory;
     property TemplatesDirectory: string read getTemplatesDirectory write SetTemplatesDirectory;
     property FLTTResultsDocument: string read getFLTTResultsDocument write SetFLTTResultsDocument;
+    property DrawTemplate: string read GetDrawTemplate;
+    property GroupTemplate: string read GetGroupTemplate;
     property ExportsTo: string read GetExportsTo;
     property FLTTResultsTemplate: string read getFLTTResultsTemplate;
-    property DrawTemplatePattern: string read getDrawTemplate write setDrawTemplate;
-    property DrawTemplateFile: string read getDrawTemplateFile;
     property SeekConfigs: TStrings read FSeekConfigs;
     property FirstRoundMode: TFirstRoundMode read GetFirstRoundMode write SetFirstRoundMode;
     property SeekCodeSaison: string read GetSeekCodeSaison;
     property SeekCodeClub: string read GetSeekCodeClub;
     property SeekCodeCategoryStatus: string read GetSeekCodeCategoryStatus;
     property SeekCodeFirstRoundMode: string read GetSeekCodeFirstRoundMode;
+    procedure SaveToFile(const Filename: TFilename);
   end;
 
   TPlayerStatus = class(TObject)
@@ -253,6 +259,7 @@ const
 
 var
   glSettings: TTournamentSettings;
+  glSettingsValues: TStrings;
   glCreateGroupGamesProc: TProc<integer>;
   glPaintPlayAreaGameContent,
   glPaintPlayAreaGroupContent: TProc<TCollectionItem>;
@@ -900,22 +907,28 @@ const
   tsPardic1: string = 'pardc1';
   tsSeekConfigs: string = 'SeekControls';
 
-constructor TTournamentSettings.Create(cnx: TLalConnection);
+constructor TTournamentSettings.Create(cnx: TLalConnection; TextValues: TStrings);
 begin
-  inherited;
+  inherited Create(cnx);
   FSeekConfigs := TStringList.Create;
+  FTextValues := TStringList.Create;
+  FTextValues.AddStrings(TextValues);
 end;
 
 destructor TTournamentSettings.Destroy;
 begin
+  FTextValues.Free;
   FSeekConfigs.Free;
   inherited;
 end;
 
 procedure TTournamentSettings.DoRead;
+var
+  z: TZReadOnlyQuery;
 begin
   FSeekConfigs.Clear;
-  with TZReadOnlyQuery.Create(nil) do
+  z := TZReadOnlyQuery.Create(nil);
+  with z do
   begin
     try
       Connection := Self.Connection;
@@ -932,10 +945,70 @@ begin
       end;
       Close;
 
+      SQL.Clear;
+      SQL.Add('SELECT pardc1'
+             +' FROM dictionnaire'
+             +' WHERE cledic = :cledic'
+             +'   AND coddic = :coddic');
+      Prepare;
+      Params[0].AsString := cs_settings;
+
+      BuildPathSettings(pvWorkingDirectory, 'WorkingDirectory', Format('%s\PING',[ExcludeTrailingPathDelimiter(ExtractFilePath(ParamStr(0)))]), z);
+      BuildPathSettings(pvTournamentsDirectory, 'TournamentsDirectory', Format('%s\Tournois',[pvWorkingDirectory]), z);
+      BuildPathSettings(pvTemplatesDirectory, 'TemplatesDirectory', Format('%s\Templates',[pvWorkingDirectory]), z);
+      BuildTemplateFilenameSettings(pvFLTTResultsDocument, 'FLTTResultsDocument', 'modResults.xltx', z);
+      BuildTemplateFilenameSettings(pvDrawTemplate, 'DrawTemplate', 'Draw_%d.xltx', z);
+      BuildTemplateFilenameSettings(pvQualificationGroupTemplate, 'QualificationGroupTemplate', 'Group_%d.xltm', z);
     finally
       Free;
     end;
   end;
+end;
+
+procedure TTournamentSettings.BuildPathSettings(var Value: string; const Name, Path: string; const Query: TZReadOnlyQuery);
+begin
+  Value := FTextValues.Values[Name];      // lire le paramètres du fichier texte
+  if Value = '' then
+  begin
+    { lire du dictionnaire }
+    Query.Params[1].AsString := Name;
+    Query.Open;
+    try
+      if not Query.Eof then
+        Value := Query.Fields[0].AsString
+      else
+        Value := Path;
+    finally
+      Query.Close;
+    end;
+  end;
+
+  Value := ExcludeTrailingPathDelimiter(Value);
+  ForceDirectories(Value);
+  FTextValues.Values[Name] := Value;
+  Write(cs_settings, Name, 'pardc1', Value);
+end;
+
+procedure TTournamentSettings.BuildTemplateFilenameSettings(var Value: string; const Name, Filename: string; const Query: TZReadOnlyQuery);
+begin
+  Value := FTextValues.Values[Name];      // lire le paramètres du fichier texte
+  if Value = '' then
+  begin
+    { lire du dictionnaire }
+    Query.Params[1].AsString := Name;
+    Query.Open;
+    try
+      if not Query.Eof then
+        Value := Query.Fields[0].AsString
+      else
+        Value := Filename;  // valeur par défaut
+    finally
+      Query.Close;
+    end;
+  end;
+
+  FTextValues.Values[Name] := Value;
+  Write(cs_settings, Name, 'pardc1', Value);
 end;
 
 procedure TTournamentSettings.DoWrite;
@@ -956,20 +1029,23 @@ begin
         Params[2].AsString := FSeekConfigs.ValueFromIndex[i];
         ExecSQL;
       end;
+
+      Params[0].AsString := cs_settings;
+      for i := 0 to FTextValues.Count-1 do
+      begin
+        Params[1].AsString := FTextValues.Names[i];
+        Params[2].AsString := FTextValues.ValueFromIndex[i];
+        try ExecSQL; except end;
+      end;
     finally
       Free;
     end;
   end;
 end;
 
-function TTournamentSettings.getDrawTemplate: string;
+function TTournamentSettings.GetDrawTemplate: string;
 begin
   Result := pvDrawTemplate;
-end;
-
-function TTournamentSettings.getDrawTemplateFile: string;
-begin
-  Result := Format('%s\%s\%s', [WorkingDirectory,TemplatesDirectory,DrawTemplatePattern]);
 end;
 
 function TTournamentSettings.getExportDirectory: string;
@@ -1000,6 +1076,11 @@ end;
 function TTournamentSettings.getFLTTResultsTemplate: string;
 begin
   Result := Format('%s\%s\%s', [WorkingDirectory,TemplatesDirectory,FLTTResultsDocument]);
+end;
+
+function TTournamentSettings.GetGroupTemplate: string;
+begin
+  Result := pvQualificationGroupTemplate;
 end;
 
 function TTournamentSettings.GetSeekCodeCategoryStatus: string;
@@ -1037,9 +1118,9 @@ begin
   Result := ExcludeTrailingPathDelimiter(pvWorkingDirectory);
 end;
 
-procedure TTournamentSettings.setDrawTemplate(const Value: string);
+procedure TTournamentSettings.SaveToFile(const Filename: TFilename);
 begin
-  pvDrawTemplate := Value;
+  FTextValues.SaveToFile(Filename);
 end;
 
 procedure TTournamentSettings.SetExportDirectory(const Value: string);
@@ -1322,18 +1403,28 @@ begin
   z := getROQuery(lcCnx);
   try
     Screen.Cursor := crHourglass;
-    z.SQL.Add('select a.dattrn,a.organisateur,a.libelle,b.codcat'
-             +'  ,c.taille,c.nbrjou'
-             +' from tournoi a, categories b, tableau c'
-             +' where a.sertrn = b.sertrn'
-             +'   and b.sercat = c.sertab'
-             +'   and c.sertab = :sertab');
+    z.SQL.Add('SELECT a.dattrn,a.organisateur,a.libelle,b.codcat,b.phase,c.nbrjou'
+//             +'  ,c.taille,c.nbrjou'
+             +'      ,CASE b.phase'
+             +'         WHEN 0 THEN c.taille'
+             +'         WHEN 1 THEN ROUND(c.nbrjou/3, 0)'
+             +'       END taille'
+             +' FROM tournoi a, categories b, tableau c'
+             +' WHERE a.sertrn = b.sertrn'
+             +'   AND b.sercat = c.sertab'
+             +'   AND c.sertab = :sertab');
     z.ParamByName('sertab').AsInteger := sertab;
     z.Open;
     taille := z.FieldByName('taille').AsInteger;
 
     glSettings.Read;
-    template := Format('%s%d.xltx', [glSettings.DrawTemplateFile, taille]);
+
+    if z.FieldByName('phase').Value = frKO then
+      template := Format(glSettings.DrawTemplate,[taille])
+    else
+      template := Format(glSettings.GroupTemplate, [3]);
+    template := Format('%s\%s', [glsettings.TemplatesDirectory, template]);
+//    template := Format('%s%d.xltx', [glSettings.DrawTemplateFile, taille]);
 
     createExcelWorkbook(xls,wkb,sht,True,template);
 
@@ -1344,67 +1435,112 @@ begin
     sht.Cells[2,2] := z.FieldByName('libelle').AsString;
     sht.Cells[3,2] := z.FieldByName('codcat').AsString;
     sht.Cells[4,2] := Format('%d participants',[z.FieldByName('nbrjou').AsInteger]);
-    z.Close;
-    z.SQL.Clear;
-    z.SQL.Add('SELECT codcls,count(*) FROM tablo WHERE sertab = :sertab'
-             +' AND serjou > 0 GROUP BY 1 ORDER BY 1');
-    z.ParamByName('sertab').AsInteger := sertab;
-    z.Open;
-    sht.Cells[5,1] := 'dont';
-    sht.cells[5,2] := Format('%d %s',[z.Fields[1].AsInteger,z.Fields[0].AsString]);
-    z.Close;
 
-    { positions }
-    sht := wkb.Worksheets['position'];
-    sht.Select;
-    row := 2;
-    z.SQL.Clear;
-    z.SQL.Add('select serblo,sertab,serjou,licence,nomjou,codclb,libclb,codcls,numtds,numrow,sertrn'
-             +' from tablo'
-             +' where sertab = :sertab'
-             +'   and coalesce(serjou,0) > 0'
-             +' order by numtds');
-    z.ParamByName('sertab').AsInteger := sertab;
-    z.Open;
-    while not z.Eof  do
+    { phase de tableau qualification directe }
+    if z.FieldByName('phase').value = frKO then
     begin
-      Inc(row);
-      if z.FieldByName('nomjou').AsString <> 'BYE' then
+      z.Close;
+      z.SQL.Clear;
+      z.SQL.Add('SELECT codcls,count(*) FROM tablo WHERE sertab = :sertab'
+               +' AND serjou > 0 GROUP BY 1 ORDER BY 1');
+      z.ParamByName('sertab').AsInteger := sertab;
+      z.Open;
+      sht.Cells[5,1] := 'dont';
+      sht.cells[5,2] := Format('%d %s',[z.Fields[1].AsInteger,z.Fields[0].AsString]);
+      z.Close;
+
+      { positions }
+      sht := wkb.Worksheets['position'];
+      sht.Select;
+      row := 2;
+      z.SQL.Clear;
+      z.SQL.Add('select serblo,sertab,serjou,licence,nomjou,codclb,libclb,codcls,numtds,numrow,sertrn'
+               +' from tablo'
+               +' where sertab = :sertab'
+               +'   and coalesce(serjou,0) > 0'
+               +' order by numtds');
+      z.ParamByName('sertab').AsInteger := sertab;
+      z.Open;
+      while not z.Eof  do
       begin
-        sht.Cells[row,3] := z.FieldByName('libclb').AsString;
-        sht.Cells[row,4] := z.FieldByName('licence').AsString;
-        sht.Cells[row,5] := z.FieldByName('nomjou').AsString;
-        sht.Cells[row,6] := z.FieldByName('codcls').AsString;
-        sht.Cells[row,8] := z.FieldByName('numrow').AsString;
+        Inc(row);
+        if z.FieldByName('nomjou').AsString <> 'BYE' then
+        begin
+          sht.Cells[row,3] := z.FieldByName('libclb').AsString;
+          sht.Cells[row,4] := z.FieldByName('licence').AsString;
+          sht.Cells[row,5] := z.FieldByName('nomjou').AsString;
+          sht.Cells[row,6] := z.FieldByName('codcls').AsString;
+          sht.Cells[row,8] := z.FieldByName('numrow').AsString;
+        end;
+        z.Next;
+        Application.ProcessMessages;
       end;
-      z.Next;
-      Application.ProcessMessages;
+
+      { exempts du 1er tour }
+      sht := wkb.Worksheets['tablo'];
+      sht.Select;
+      row := 4;
+      repeat
+        j1 := sht.Cells[Pred(row),2];
+        j2 := sht.Cells[Succ(row),2];
+        if (j1<>'') and (j2='') then
+          sht.Cells[row,3] := 'w'
+        else if (j1='') and (j2<>'') then
+          sht.Cells[Succ(row),3] := 'w';
+        Inc(row,4);
+      until (row > Succ(taille*2));
+
+      z.Close;
+      z.SQL.Clear;
+      z.SQL.Add('select COUNT( * ) from match'
+               +' where sertab = :sertab'
+               +'   and stamtc = :stamtc');
+      z.ParamByName('sertab').AsInteger := sertab;
+      z.ParamByName('stamtc').Value := gsOver;
+      z.Open;
+      Games2excel(sertab,wkb,score,complet);
+      z.Close;
+    end
+    else
+    { phase de groupe }
+    begin
+      { positions }
+      sht := wkb.Worksheets['position'];
+      sht.Select;
+      row := 2;
+
+      if z.Active then z.Close;
+      z.SQL.Clear;
+      z.SQL.Add('SELECT grp.sergrp,grp.numgrp,cmp.numseq'
+               +'      ,jou.licence,jou.nomjou,jou.codclb,clb.libclb,jou.codcls'
+               +' FROM groupe grp'
+               +'   LEFT JOIN compo_groupe cmp ON grp.sergrp = cmp.sergrp'
+               +'   LEFT JOIN joueur jou ON cmp.serjou = jou.serjou'
+               +'   LEFT JOIN club clb ON clb.codclb = jou.codclb'
+               +' WHERE grp.sercat = :sercat'
+               +' ORDER BY grp.numgrp,cmp.numseq');
+      z.Params[0].AsInteger := sertab;
+      z.Open;
+      try
+        while not z.Eof do
+        begin
+          Inc(row);
+          if z.FieldByName('nomjou').AsString <> 'BYE' then
+          begin
+            sht.Cells[row,4] := z.FieldByName('libclb').AsString;
+            sht.Cells[row,5] := z.FieldByName('licence').AsString;
+            sht.Cells[row,6] := z.FieldByName('nomjou').AsString;
+            sht.Cells[row,7] := z.FieldByName('codcls').AsString;
+            sht.Cells[row,8] := z.FieldByName('numgrp').AsInteger;
+            sht.cells[row,9] := z.FieldByName('numseq').AsInteger;
+          end;
+          z.Next;
+          Application.ProcessMessages;
+        end;
+      finally
+        z.Close;
+      end;
     end;
-
-    { exempts du 1er tour }
-    sht := wkb.Worksheets['tablo'];
-    sht.Select;
-    row := 4;
-    repeat
-      j1 := sht.Cells[Pred(row),2];
-      j2 := sht.Cells[Succ(row),2];
-      if (j1<>'') and (j2='') then
-        sht.Cells[row,3] := 'w'
-      else if (j1='') and (j2<>'') then
-        sht.Cells[Succ(row),3] := 'w';
-      Inc(row,4);
-    until (row > Succ(taille*2));
-
-    z.Close;
-    z.SQL.Clear;
-    z.SQL.Add('select COUNT( * ) from match'
-             +' where sertab = :sertab'
-             +'   and stamtc = :stamtc');
-    z.ParamByName('sertab').AsInteger := sertab;
-    z.ParamByName('stamtc').Value := gsOver;
-    z.Open;
-    Games2excel(sertab,wkb,score,complet);
-    z.Close;
   finally
     z.Free;
     Screen.Cursor := crDefault;
@@ -2812,6 +2948,7 @@ initialization
   pvUpdateCategorysStatusQuery := nil;
   pvCheckCategStatusSelGroupGamesCount := nil;
   pvCheckCategStatusSelGroupCount := nil;
+  glSettingsValues := TStringList.Create;
 
   glCreateGroupGamesProc := procedure(sergrp: integer)
     var
@@ -3074,6 +3211,7 @@ initialization
       end;
     end;
   glPaintPlayAreaGroupContent := glPaintPlayAreaGameContent;
+
 finalization
   lcGetColorQuery.Free;
   lcSetColorQuery.Free;
@@ -3085,4 +3223,5 @@ finalization
   pvUpdateCategorysStatusQuery.Free;
   pvCheckCategStatusSelGroupGamesCount.Free;
   pvCheckCategStatusSelGroupCount.Free;
+  glSettingsValues.Free;
 end.
