@@ -452,6 +452,8 @@ type
     procedure ExecuteDisplayTableauAction;
 
     procedure QualificationGroupRefresh(var Message: TMessage); message wm_qualificationGroupRefresh;
+    function PrepareExportDirectories(const sertrn: integer;
+      const organisateur: string): TFilename;
 
   public
     { Déclarations publiques }
@@ -3186,8 +3188,19 @@ end;
 procedure TtournamentW.excelActionExecute(Sender: TObject);
 begin
   inherited;
-  Draw2Excel(sertab.Field.AsInteger, score.Checked, completCheck.Checked);
+  Draw2Excel(sertab.Field.AsInteger, score.Checked, completCheck.Checked, PrepareExportDirectories(sertrn.Field.AsInteger, organisateur.Field.AsString));
   MessageDlg('export Excel terminé',mtInformation,[mbOk],0);
+end;
+
+function TtournamentW.PrepareExportDirectories(const sertrn: integer; const organisateur: string): TFilename;
+var
+  expdir: TFilename;
+begin
+  Result := glSettings.ExportDirectory;
+  expdir := Format('%s\%d\%.5d - %s',[glSettings.TournamentsDirectory, saison.Field.AsInteger, sertrn, organisateur]);
+  ForceDirectories(expdir);
+  if DirectoryExists(expdir) then
+    Result := expdir;
 end;
 
 procedure TtournamentW.firstRoundModeTournoiEnter(Sender: TObject);

@@ -200,7 +200,7 @@ procedure UpdateQualificationGroupStatus(const sergrp: integer; const status: TQ
 {: creates results excel document for FLTT }
 function createResultsFLTTDocument(const sertrn: integer): string;
 {: exports draw on excel file }
-procedure Draw2Excel(const sertab: integer; const score,complet: boolean);
+procedure Draw2Excel(const sertab: integer; const score,complet: boolean; const Path: TFilename = '');
 {: get single seek object }
 function globalSeek: TLalSeek; overload;
 {: get single seek object }
@@ -291,7 +291,8 @@ function stringToPingItem(const Value: string): TPingItem; forward;
 function pingItemToString(const Value: TPingItem): string; forward;
 procedure initColorQuery; forward;
 {: exports games on excel file }
-procedure Games2Excel(const sertab: integer; const book: Variant; const score,complet: boolean); forward;
+procedure Games2Excel(const sertab: integer; const book: Variant; const score,complet: boolean; const Phase: TFirstRoundMode; const Path: TFilename = ''); forward;
+function GetExportFilename(const Path, Filename: TFilename; const Phase: TFirstRoundMode): TFilename; forward;
 
 const
   piDefaultColor: TColor = clWindow;
@@ -1390,15 +1391,19 @@ begin
   sht.ExportAsFixedFormat(xlTypePDF,filename);
 end;
 
-procedure Draw2Excel(const sertab: integer; const score,complet: boolean);
+procedure Draw2Excel(const sertab: integer; const score,complet: boolean; const Path: TFilename);
 var
   xls,
   wkb,
-  sht: variant;
+  sht,
+  PageSetup: variant;
   z: TZReadOnlyQuery;
   row,taille: integer;
   template,
   j1,j2: string;
+  ExportFileName: TFileName;
+  i: Integer;
+  phase: TFirstRoundMode;
 begin
   z := getROQuery(lcCnx);
   try
@@ -1416,15 +1421,14 @@ begin
     z.ParamByName('sertab').AsInteger := sertab;
     z.Open;
     taille := z.FieldByName('taille').AsInteger;
-
+    phase := z.FieldByName('phase').Value;
     glSettings.Read;
 
-    if z.FieldByName('phase').Value = frKO then
-      template := Format(glSettings.DrawTemplate,[taille])
-    else
-      template := Format(glSettings.GroupTemplate, [3]);
+    case phase of
+      frKO:            template := Format(glSettings.DrawTemplate,[taille]);
+      frQualification: template := Format(glSettings.GroupTemplate, [3]);
+    end;
     template := Format('%s\%s', [glsettings.TemplatesDirectory, template]);
-//    template := Format('%s%d.xltx', [glSettings.DrawTemplateFile, taille]);
 
     createExcelWorkbook(xls,wkb,sht,True,template);
 
@@ -1498,7 +1502,7 @@ begin
       z.ParamByName('sertab').AsInteger := sertab;
       z.ParamByName('stamtc').Value := gsOver;
       z.Open;
-      Games2excel(sertab,wkb,score,complet);
+      Games2excel(sertab,wkb,score,complet,phase,Path);
       z.Close;
     end
     else
@@ -1540,6 +1544,25 @@ begin
       finally
         z.Close;
       end;
+      z.SQL.Clear;
+      z.SQL.Add('SELECT codcat FROM categories WHERE sercat = ' + IntToStr(sertab));
+      z.Open;
+      ExportFileName := GetExportFilename(Path, z.Fields[0].AsString,phase);
+      wkb.SaveAs(ExportFilename{, FileFormat:=xlOpenXMLWorkbookMacroEnabled}, AddToMRU:=True);
+      z.Close;
+
+      {sht.ExportAsFixedFormat(xlTypePDF,ChangeFileExt(ExportFileName,'.pdf'));}
+      { export from sheet POULE1 to sheet POULE_taille }
+      xls.PrintCommunication := False;
+      for i := 1 to wkb.Worksheets.Count do
+      begin
+        PageSetup := wkb.Worksheets[i].PageSetup;
+        PageSetup.FitToPagesWide := 1;
+        PageSetup.FitToPagesTall := 1;
+      end;
+      xls.PrintCommunication := True;
+      wkb.ExportAsFixedFormat(xlTypePDF,ChangeFileExt(ExportFileName,'.pdf'), From:=4, To:=4+taille-1);
+
     end;
   finally
     z.Free;
@@ -1547,12 +1570,14 @@ begin
   end;
 end;
 
-procedure Games2Excel(const sertab: integer; const book: Variant; const score,complet: boolean);
+procedure Games2Excel(const sertab: integer; const book: Variant; const score,complet: boolean; const Phase: TFirstRoundMode; const Path: TFilename);
 var
   z: TZReadOnlyQuery;
   row,col,level,numseq,sertrn: integer;
   sht,rng: Variant;
-  dir,expdir,filename: string;
+  dir{,expdir,filename}: string;
+  ExportFileName: TFileName;
+//  FileIndex: integer;
 begin
   z := getROQuery(lcCnx);
   try
@@ -1743,45 +1768,76 @@ begin
                +' WHERE sertrn = ' + sertrn.ToString);
       z.Open;
 
-      dir := buildExportDirectory(sertrn);
-      if not DirectoryExists(dir) then
+      if Path <> '' then
       begin
-        expdir := z.FieldByName('expcol').AsString;
-        if (expdir = '') then
-        begin
-          if (z.FieldByName('codclb').AsString = '') then
-            expdir := z.FieldByName('codclb').AsString
-          else
-            expdir := 'EXP';
-        end;
-        glSettings.Read;
-        dir := Format('%s\%s\%d', [glSettings.GetExportsTo,expdir,z.Fields[2].AsInteger]);
-        row := 0;
-        while DirectoryExists(dir) do
-        begin
-          Inc(row);
-          dir := Format('%s\%s\%d(%.2d)', [glSettings.GetExportsTo,expdir,z.Fields[2].AsInteger,row]);
-        end;
-        ForceDirectories(dir);
+        dir := Path;
+//        FileIndex := 0;
+//        dir := buildExportDirectory(sertrn);
+//        if not DirectoryExists(dir) then
+//        begin
+//          expdir := z.FieldByName('expcol').AsString;
+//          if (expdir = '') then
+//          begin
+//            if (z.FieldByName('codclb').AsString = '') then
+//              expdir := z.FieldByName('codclb').AsString
+//            else
+//              expdir := 'EXP';
+//          end;
+//          glSettings.Read;
+//          dir := Format('%s\%s\%d', [glSettings.GetExportsTo,expdir,z.Fields[2].AsInteger]);
+//          row := 0;
+//          while DirectoryExists(dir) do
+//          begin
+//            Inc(row);
+//            dir := Format('%s\%s\%d(%.2d)', [glSettings.GetExportsTo,expdir,z.Fields[2].AsInteger,row]);
+//          end;
+//          ForceDirectories(dir);
+//          z.Close;
+//        end;
+        z.SQL.Clear;
+        z.SQL.Add('SELECT codcat FROM categories WHERE sercat = ' + IntToStr(sertab));
+        z.Open;
+//        filename := Format('%s\%s',[dir, z.Fields[0].AsString]);
+//        filename := Format('%s',[FindAndReplaceAll(filename,'/','-')]);
+//        { sauvegarde du fichier excel }
+//        expdir := Format('%s_%.3d.xlsx',[filename, FileIndex]);
+//        while FileExists(expdir) do
+//        begin
+//          Inc(FileIndex);
+//          expdir := Format('%s_%.3d.xlsx',[filename, FileIndex]);
+//        end;
+//
+        ExportFileName := GetExportFilename(dir, z.Fields[0].AsString,phase);
+        Book.SaveAs(ExportFilename, AddToMRU:=True);
+//        book.SaveAs(expdir, AddToMRU:=True);
         z.Close;
+
+        { export du tablo en pdf }
+        sht.ExportAsFixedFormat(xlTypePDF,ChangeFileExt(ExportFileName,'.pdf'));
       end;
 
-      z.SQL.Clear;
-      z.SQL.Add('SELECT codcat FROM categories WHERE sercat = ' + IntToStr(sertab));
-      z.Open;
-      filename := Format('%s\%s',[dir, z.Fields[0].AsString]);
-      filename := Format('%s',[FindAndReplaceAll(filename,'/','-')]);
-      { sauvegarde du fichier excel }
-      expdir := Format('%s.xlsx',[filename]);
-      book.SaveAs(expdir, AddToMRU:=True);
-      z.Close;
-
-      { export du tablo en pdf }
-      sht.ExportAsFixedFormat(xlTypePDF,Format('%s.pdf',[filename]));
     end;
   finally
     z.Free;
   end;
+end;
+
+function GetExportFilename(const Path, Filename: TFilename; const Phase: TFirstRoundMode): TFilename;
+var
+  FileIndex: integer;
+  Temp: TFilename;
+const
+  frm: array[TFirstRoundMode] of string = ('Draw','Groups');
+begin
+  FileIndex := 0;
+  Result := FindAndReplaceAll(Format('%s\%s_%s',[Path, Filename, frm[Phase]]),'/','-');
+  Temp := Format('%s_%.3d.xlsx',[Result, FileIndex]);
+  while FileExists(Temp) do
+  begin
+    Inc(FileIndex);
+    Temp := Format('%s_%.3d.xlsx',[Result, FileIndex]);
+  end;
+  Result := Temp;
 end;
 
 //procedure readConfigurationFile(const filename: string);
