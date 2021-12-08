@@ -375,6 +375,7 @@ begin
     Connection := Self.pvCnx.get;
     SQL.Add('SELECT grp.sercat,grp.numgrp,grp.stagrp,grp.sertrn,grp.sergrp'
            +'      ,cat.codcat,cat.heudeb'
+           +'      ,grp.teilnehmer'
            +' FROM groupe grp'
            +'  INNER JOIN categories cat ON grp.sercat = cat.sercat'
            +' WHERE grp.sergrp = :sergrp');
@@ -461,7 +462,7 @@ end;
 
 procedure TGroupPanel.SetGroupNumber(const Value: integer);
 begin
-  pvGroupNumberLabel.Caption := Format('Groupe %d (%d)', [Value, pvSerGrp]);
+  pvGroupNumberLabel.Caption := Format('Groupe %d [%d] (%d)', [Value, pvGroupQuery.FieldByName('teilnehmer').AsInteger, pvSerGrp]);
 end;
 
 procedure TGroupPanel.SetTableNumber(const Value: integer);

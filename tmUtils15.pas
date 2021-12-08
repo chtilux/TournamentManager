@@ -6,7 +6,7 @@ uses
   Graphics, lal_connection, Messages, Vcl.Controls, Classes,
   Vcl.ExtCtrls, ZDataset, ZAbstractRODataset, DB, System.Types, SysUtils,
   lal_settings, dataWindow, lal_seek, ZConnection, TMEnums, Tournament, Arena,
-  PlayArea;
+  PlayArea, tm.AuscheidungsGroup;
 
 type
 
@@ -187,11 +187,14 @@ procedure BeginQualificationGroup(const sertrn, sergrp: integer; const numtbl: s
 procedure cancelGame(const sermtc: integer);
 {: }
 procedure TogglePhase(const sercat: integer; Fieldname: string);
+
+{: cacule le cadre des groupes et du tour final pour la catégorie }
+function GetHanhang2(const sercat: integer): TAnhang2;
 {: }
 procedure QualifySeeds(const sercat: integer);
 {: }
 function CreateQualificationGroup(const sercat, sertrn,
-  numgrp: integer): integer;
+  numgrp: integer; const teilnehmer: smallint): integer;
 {: }
 function InsertIntoQualificationGroup(const sergrp, serjou,
   sercat, sertrn: integer): integer;
@@ -256,6 +259,7 @@ const
   cs_game_is_over = 'game_is_over';
 
   clOdd: array[boolean] of TPingItem = (piPair,piOdd);
+  PLAYERS_PER_GROUP = 3;
 
 var
   glSettings: TTournamentSettings;
@@ -758,6 +762,62 @@ begin
   end;
 end;
 
+function GetHanhang2(const sercat: integer): TAnhang2;
+var
+  z: TZReadOnlyQuery;
+  reste: Integer;
+begin
+//  FillChar(Result, SizeOf(TAnhang2), 0);
+  Result := TAnhang2.Create;
+  z := getROQuery(lcCnx);
+  try
+    z.SQL.Add('SELECT nbrjou FROM tableau WHERE sertab = :sercat');
+    z.Params[0].AsInteger := sercat;
+    z.Open;
+    Result.Teilnehmer := z.Fields[0].AsInteger;
+    z.Close;
+  finally
+    z.Free;
+  end;
+  case Result.Teilnehmer of
+    3,4,5: begin
+      SetLength(Result.Auscheidung.Groups,1);
+      Result.Auscheidung.Groups[0].NumberOfPlayers := Result.teilnehmer;
+      Result.Auscheidung.Groups[0].NumberOfGroups := 1;
+    end;
+
+    else begin
+      reste := Result.teilnehmer mod PLAYERS_PER_GROUP;
+      case reste of
+        0 : begin
+              SetLength(Result.Auscheidung.Groups,1);
+              Result.Auscheidung.Groups[0].NumberOfPlayers := PLAYERS_PER_GROUP;
+              Result.Auscheidung.Groups[0].NumberOfGroups := Result.teilnehmer div PLAYERS_PER_GROUP;
+              Result.HauptRunde.Players := Result.Auscheidung.Groups[0].NumberOfGroups;
+        end;
+        1 : begin
+              SetLength(Result.Auscheidung.Groups,2);
+              Result.Auscheidung.Groups[0].NumberOfPlayers := PLAYERS_PER_GROUP;
+              Result.Auscheidung.Groups[0].NumberOfGroups := Pred(Result.teilnehmer div PLAYERS_PER_GROUP);
+              Result.Auscheidung.Groups[1].NumberOfPlayers := 2;
+              Result.Auscheidung.Groups[1].NumberOfGroups := 2;
+              Result.HauptRunde.Players := Result.Auscheidung.Groups[0].NumberOfGroups + Result.Auscheidung.Groups[1].NumberOfGroups;
+        end;
+        2 : begin
+              SetLength(Result.Auscheidung.Groups,2);
+              Result.Auscheidung.Groups[0].NumberOfPlayers := PLAYERS_PER_GROUP;
+              Result.Auscheidung.Groups[0].NumberOfGroups := Result.teilnehmer div PLAYERS_PER_GROUP;
+              Result.Auscheidung.Groups[1].NumberOfPlayers := 2;
+              Result.Auscheidung.Groups[1].NumberOfGroups := 1;
+              Result.HauptRunde.Players := Result.Auscheidung.Groups[0].NumberOfGroups + Result.Auscheidung.Groups[1].NumberOfGroups;
+        end;
+      end;
+      if Result.HauptRunde.Players <= 3 then
+        Result.HauptRunde.System := frQualification;
+    end;
+  end;
+end;
+
 procedure QualifySeeds(const sercat: integer);
 var
   nbrgrp,min,max: integer;
@@ -794,7 +854,7 @@ begin
 end;
 
 function CreateQualificationGroup(const sercat, sertrn,
-  numgrp: integer): integer;
+  numgrp: integer; const teilnehmer: smallint): integer;
 var
   z: TZReadOnlyQuery;
   seq: TLalSequence;
@@ -812,14 +872,15 @@ begin
     begin
       z.Close;
       z.SQL.Clear;
-      z.SQL.Add('INSERT INTO groupe (sergrp,sercat,numgrp,stagrp,sertrn)'
-               +' VALUES (:sergrp,:sercat,:numgrp,:stagrp,:sertrn)');
+      z.SQL.Add('INSERT INTO groupe (sergrp,sercat,numgrp,stagrp,sertrn,teilnehmer)'
+               +' VALUES (:sergrp,:sercat,:numgrp,:stagrp,:sertrn,:teilnehmer)');
       seq := TLalSequence.Create(nil, lcCnx);
       z.Params[0].AsInteger := Seq.SerialByName('CATEGORIE');
       z.Params[1].AsInteger := sercat;
       z.Params[2].AsInteger := numgrp;
       z.Params[3].AsInteger := Ord(qgsInactive);
       z.Params[4].AsInteger := sertrn;
+      z.Params[5].AsInteger := teilnehmer;
       z.ExecSQL;
       Result := z.Params[0].AsInteger;
     end

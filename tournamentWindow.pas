@@ -8,7 +8,7 @@ uses
   Vcl.Mask, Vcl.DBCtrls, Vcl.ComCtrls, lal_sequence, Vcl.Grids, Vcl.DBGrids,
   System.Actions, Vcl.ActnList, mainWindow, Vcl.Menus, Vcl.DBCGrids,
   Vcl.Buttons, ZAbstractRODataset,tmUtils15, lal_connection, Contnrs, lal_seek,
-  groupPanel, TMEnums;
+  groupPanel, TMEnums, Spring.Collections, tm.AuscheidungsGroup;
 
 type
   TCell = class(TObject)
@@ -396,8 +396,9 @@ type
     pvSeq: TLalSequence;
     pvSeek: TLalSeek;
     pvStagrp: TZReadOnlyQuery;
+    pvAnhangs: IDictionary<integer,TAnhang2>;
 
-    function  CreeGroupeQualification(const sercat,sertrn,numgrp: integer): integer;
+    function  CreeGroupeQualification(const sercat,sertrn,numgrp,teilnehmer: integer): integer;
     function  editMatch(const sermtc: integer): boolean;
     function CreateGroupPanel(const sergrp: integer): TGroupPanel;
     function InsereJoueurDansGroupeQualification(const sergrp,serjou,sercat,sertrn: integer): integer;
@@ -416,7 +417,8 @@ type
     function GetQualificationsGroupStatusCount(const sercat: integer; const qgs: TQualificationGroupStatus): integer;
     procedure closeDatasets;
     procedure colorsChanged(var Message: TMessage); message wm_colorsChanged;
-    procedure ComposeGroupes(const sercat: integer);
+    procedure ComposeGroupes(const sercat: integer; const Anhang2: TAnhang2);
+    procedure ComposeGroupesAnhang2(const sercat: integer; var Anhang2: TAnhang2);
     procedure CreateGroupPanels(const sercat: integer);
     procedure dbGridColumns(grid: TDBGrid);
     procedure debug(const text: string);
@@ -454,6 +456,8 @@ type
     procedure QualificationGroupRefresh(var Message: TMessage); message wm_qualificationGroupRefresh;
     function PrepareExportDirectories(const sertrn: integer;
       const organisateur: string): TFilename;
+    procedure RegisterGruppen(const sercat: integer;
+      Gruppen: IList<IAuscheidungGruppe>);
 
   public
     { Déclarations publiques }
@@ -700,11 +704,14 @@ end;
 procedure TtournamentW.FormDestroy(Sender: TObject);
 const
   checked: array[boolean] of string = ('0','1');
+var
+  i: Integer;
 begin
   _debug.Free;
   glSettings.Write('settings','exportScore','pardc1',checked[score.Checked]);
   glSettings.write('settings','exportComplet','pardc1',checked[completCheck.Checked]);
   glSettings.Write;
+
   inherited;
 end;
 
@@ -807,6 +814,7 @@ begin
     end;
   end;
 
+  pvAnhangs := TCollections.CreateDictionary<integer, TAnhang2>;
 
   if _tournament.Active and not _tournament.IsEmpty then
   begin
@@ -1216,7 +1224,7 @@ begin
       FieldByName('sercat').AsInteger := pvSeq.SerialByName('CATEGORIE');
       FieldByName('sertrn').AsInteger := _tournament.FieldByName('sertrn').AsInteger;
       FieldByName('saison').AsInteger := _tournament.FieldByName('saison').AsInteger;
-      FieldByName('simple').AsString := getDefValue('categories','simple','1');
+      FieldByName('simple').AsString := getDefValue('categories','simple',Ord(gkSimple).ToString);
       FieldByName('handicap').AsString := getDefValue('categories','handicap','0');
       FieldByName('numset').AsString := getDefValue('categories','numset','3');
       FieldByName('catage').AsString := getDefValue('categories','catage','0');
@@ -1537,7 +1545,7 @@ begin
       end;
     end
     { open handicap, on ajoute tous les classements }
-    else if (Dataset.FieldByName('simple').AsString = '1') and
+    else if (Dataset.FieldByName('simple').Value = gkSimple) and
        (Dataset.FieldByName('handicap').AsString = '1') and
        (Dataset.FieldByName('catage').AsString = '0') then
     begin
@@ -3007,9 +3015,9 @@ begin
           inscat.ParamByName('sercat').AsInteger := pvSeq.SerialByName('INSCRIPTION');
           inscat.ParamByName('codcat').AsString := codcat;
           if codptn = '' then
-            inscat.ParamByName('simple').AsString := '1'
+            inscat.ParamByName('simple').Value := Ord(gkSimple).ToString
           else
-            inscat.ParamByName('simple').AsString := '0';
+            inscat.ParamByName('simple').AsString := Ord(gkDouble).ToString;
           inscat.ExecSQL;
           cat.Close;
           cat.Open;
@@ -3019,7 +3027,7 @@ begin
           record est incomplet (pas de partenaire déclaré), alors la catégorie va être
           classifiée comme simple. Il faut donc contrôler à chaque fois. }
         begin
-          if (cat.FieldByName('simple').AsString = '1') and (codptn <> '') then
+          if (cat.FieldByName('simple').Value = gkSimple) and (codptn <> '') then
           begin
             w.SQL.Clear;
             w.SQL.Add('update categories set simple = 0 WHERE sercat = :sercat');
@@ -3038,13 +3046,13 @@ begin
             insc.ParamByName('datinsc').AsString := Copy(datinsc,1,16);
             insc.ParamByName('simple').AsString := '1';
             insc.ParamByName('serjou').AsInteger := jou.FieldByName('serjou').AsInteger;
-            insc.ParamByName('statut').AsString := '1';
+            insc.ParamByName('statut').Value := gkSimple;
             jou.Close;
             codptn := _sht.Cells[row,col_codptn];
             codptn := Trim(codptn);
             if codptn <> '' then
             begin
-              insc.ParamByName('simple').AsString := '0';
+              insc.ParamByName('simple').Value := gkDouble;
               jou.ParamByName('licence').AsString := codptn;
               jou.Open;
               if not jou.IsEmpty then
@@ -3186,10 +3194,16 @@ begin
 end;
 
 procedure TtournamentW.excelActionExecute(Sender: TObject);
+var
+  anhang: TAnhang2;
 begin
   inherited;
-  Draw2Excel(sertab.Field.AsInteger, score.Checked, completCheck.Checked, PrepareExportDirectories(sertrn.Field.AsInteger, organisateur.Field.AsString));
-  MessageDlg('export Excel terminé',mtInformation,[mbOk],0);
+//  Draw2Excel(sertab.Field.AsInteger, score.Checked, completCheck.Checked, PrepareExportDirectories(sertrn.Field.AsInteger, organisateur.Field.AsString));
+  if pvAnhangs.TryGetValue(sertab.Field.AsInteger,anhang) then
+  begin
+    ExportAuscheidungsGruppeToExcel(pvCnx.get, sertab.Field.AsInteger,glsettings.TemplatesDirectory, Format('%s\%s.xlsx',[PrepareExportDirectories(sertrn.Field.AsInteger, organisateur.Field.AsString),codcat.Field.AsString]),anhang);
+    MessageDlg('export Excel terminé',mtInformation,[mbOk],0);
+  end;
 end;
 
 function TtournamentW.PrepareExportDirectories(const sertrn: integer; const organisateur: string): TFilename;
@@ -3222,38 +3236,6 @@ begin
       TDBEdit(Sender).DataSource.DataSet.Edit;
       TDBEdit(Sender).Field.AsString := pvSeek.Returns.Values['pardc1'];
     end;
-  end;
-end;
-
-procedure TtournamentW.GenerateTabValues(sertab: integer);
-var
-  z: TZReadOnlyQuery;
-begin
-  z := nil;
-  try
-    z := getROQuery(pvCnx);
-    if _tab.Active then
-      _tab.Close;
-    _tab.ParamByName('sertab').AsInteger := sertab;
-    _tab.Open;
-    if (_tab.IsEmpty) or ((_cat.FieldByName('phase').AsInteger = Ord(frQualification)) and (_tab.FieldByName('nbrgrp').AsInteger = 0)) then
-    begin
-      z.SQL.Clear;
-      z.SQL.Add('INSERT INTO tableau (sertab,taille,nbrjou,nbrtds,sertrn,nbrgrp)'
-               +' VALUES (:sertab,:taille,:nbrjou,:nbrtds,:sertrn,0)');
-      z.ParamByName('sertab').AsInteger := sertab;
-      z.ParamByName('nbrjou').AsInteger := _cat.FieldByName('participants').AsInteger;
-      z.ParamByName('sertrn').AsInteger := _sertrn;
-      z.ParamByName('taille').AsInteger := getTailleTableau(_cat.FieldByName('participants').AsInteger);
-      z.ParamByName('nbrtds').AsInteger := z.ParamByName('taille').AsInteger div 8;
-      z.ExecSQL;
-      _tab.Refresh;
-//      _tab.Close;
-//      _tab.ParamByName('sertab').AsInteger := sertab;
-//      _tab.Open;
-    end;
-  finally
-    freeROQuerys([z]);
   end;
 end;
 
@@ -3501,14 +3483,21 @@ end;
 procedure TtournamentW.BuildGroups(const sercat: integer);
 var
   cursor: TCursor;
+  anhang2: TAnhang2;
 begin
   cursor := Screen.Cursor;
   try
     pvCnx.startTransaction;
     try
       Screen.Cursor := crSQLWait;
-      QualifieTDS(sercat);
-      ComposeGroupes(sercat);
+//      QualifieTDS(sercat);   Pas de seed en qualification
+      anhang2 := GetHanhang2(sercat);
+      pvAnhangs.AddOrSetValue(sercat, anhang2);
+      ComposeGroupesAnhang2(sercat, anhang2);
+//      {$ifdef debug}
+//      pvCnx.rollback;
+//      Exit;
+//      {$endif}
       pvCnx.commit;
       CheckAndSetCategorieStatusAfterUpdate(sercat);
 //      _stacat(sercat,csGroup);
@@ -3525,53 +3514,12 @@ begin
   end;
 end;
 
-procedure TtournamentW.QualificationGroupRefresh(var Message: TMessage);
-var
-  i: Integer;
-begin
-  for i := 0 to GroupsScrollBox.ControlCount-1 do
-    if GroupsScrollBox.Controls[i] is TGroupPanel then
-      if TGroupPanel(GroupsScrollBox.Controls[i]).Sergrp = Message.WParam then
-        TGroupPanel(GroupsScrollBox.Controls[i]).Refresh;
-end;
-
 procedure TtournamentW.QualifieTDS(const sercat: integer);
-//var
-//  nbrgrp,min,max: integer;
-//  z: TZReadOnlyQuery;
 begin
   QualifySeeds(sercat);
-//  z := getROQuery(pvCnx);
-//  try
-//    z.SQL.Add('SELECT taille,nbrjou FROM tableau WHERE sertab = :sercat');
-//    z.Params[0].AsInteger := sercat;
-//    z.Open;
-//    { déterminer le nombre de groupes de 3 }
-//    nbrgrp := z.FieldByName('nbrjou').AsInteger div 3;
-//    { passer à non-qualifié les joueurs des groupes hors tds }
-//    min := Succ(z.FieldByName('nbrjou').AsInteger - nbrgrp*3);
-//    max := z.FieldByName('taille').AsInteger;
-//    z.Close;
-//    z.SQL.Clear;
-//    z.SQL.Add('UPDATE tableau SET nbrgrp = :nbrgrp WHERE sertab = :sercat');
-//    z.Params[0].AsInteger := nbrgrp;
-//    z.Params[1].AsInteger := sercat;
-//    z.ExecSQL;
-//    z.SQL.Clear;
-//    z.SQL.Add('UPDATE prptab SET is_qualified = :is_qualified'
-//             +' WHERE sertab = :sercat'
-//             +'   AND numtds BETWEEN :min AND :max');
-//    z.Params[0].AsInteger := ord(rsDisqualified);
-//    z.Params[1].AsInteger := sercat;
-//    z.Params[2].AsInteger := min;
-//    z.Params[3].AsInteger := max;
-//    z.ExecSQL;
-//  finally
-//    z.Free;
-//  end;
 end;
 
-procedure TtournamentW.ComposeGroupes(const sercat: integer);
+procedure TtournamentW.ComposeGroupes(const sercat: integer; const Anhang2: TAnhang2);
 var
   sel{,z}: TZReadOnlyQuery;
   sertrn,
@@ -3585,7 +3533,8 @@ begin
     sertrn := _tab.FieldByName('sertrn').AsInteger;
 
     sel := getROQuery(pvCnx);
-    sel.SQL.Add('SELECT numtds,serjou,licence,nomjou,codclb,libclb,classement FROM prptab'
+    sel.SQL.Add('SELECT numtds,serjou,licence,nomjou,codclb,libclb,classement'
+               +' FROM prptab'
                +' WHERE sertab = :sercat'
                +'   AND is_qualified = :is_qualified'
                +'   AND serjou > 0'
@@ -3598,7 +3547,7 @@ begin
     while not sel.Eof do
     begin
       CalculeNumeroGroupe(numgrp,nbrgrp,sens);
-      sergrp := CreeGroupeQualification(sercat,sertrn,numgrp);
+      sergrp := CreeGroupeQualification(sercat,sertrn,numgrp,3);
       InsereJoueurDansGroupeQualification(sergrp,sel.FieldByName('serjou').AsInteger,sercat,sertrn);
       sel.Next;
       Application.ProcessMessages;
@@ -3607,6 +3556,113 @@ begin
   finally
     sel.Free;
 //    z.Free;
+  end;
+end;
+
+procedure TtournamentW.ComposeGroupesAnhang2(const sercat: integer;
+  var Anhang2: TAnhang2);
+
+  function GetSpieler(Dataset: TDataset): TSpieler;
+  begin
+    Result.Verein := Dataset.FieldByName('libclb').AsString;
+    Result.Lizenz := Dataset.FieldByName('licence').AsString;
+    Result.Name := Dataset.FieldByName('nomjou').AsString;
+    Result.Klassement := Dataset.FieldByName('classement').AsString;
+    Result.SerJou := Dataset.FieldByName('serjou').AsInteger;
+  end;
+var
+  spieler: TZReadOnlyQuery;
+  grp: IAuscheidungGruppe;
+//  groupList: IList<IAuscheidungGruppe>;
+  i,j,nummer,sens: Integer;
+  spl: TSpieler;
+  keys: IReadOnlyCollection<integer>;
+  key: integer;
+begin
+  {
+    Sélection des joueurs qualifiés. Ils sont déjà triés selon l'IR15 lors de la
+    préparation de la catégorie (PrepareActionExecute).
+  }
+  spieler := TZReadOnlyQuery.Create(nil);
+  try
+    spieler.Connection := pvCnx.get;
+    spieler.SQL.Add('SELECT numtds,serjou,licence,nomjou,codclb,libclb,classement'
+                   +' FROM prptab'
+                   +' WHERE sertab = :sercat'
+                   +'   AND is_qualified = :is_qualified'
+                   +'   AND serjou > 0'
+                   +' ORDER BY numtds');
+    spieler.Params[0].AsInteger := sercat;
+    spieler.Params[1].Value := rsQualified;
+    spieler.Open;
+    if not spieler.Eof then
+    begin
+      { création de la liste des groupes }
+//      Anhang2.GruppenListe := TCollections.CreateList<IAuscheidungGruppe>;
+      nummer := 0;
+      for i := Low(Anhang2.Auscheidung.Groups) to High(Anhang2.Auscheidung.Groups) do
+      begin
+        for j := 0 to Anhang2.Auscheidung.Groups[i].NumberOfGroups - 1 do
+        begin
+          Inc(nummer);
+          grp := TAuscheidungsGruppeFabrik.CreateGruppe(nummer, Anhang2.Auscheidung.Groups[i].NumberOfPlayers);
+          Anhang2.GruppenListe.Add(grp);
+        end;
+      end;
+
+      sens := +1; i := -1;
+      while not spieler.Eof do
+      begin
+        spl := GetSpieler(spieler);
+        Inc(i, sens);
+        if sens = +1 then
+        begin
+          if i = Anhang2.GruppenListe.Count then
+          begin
+            i := Pred(i);
+            sens := -1;
+          end;
+        end
+        else
+        begin
+          if i = -1 then
+          begin
+            i := 0;
+            sens := +1;
+          end;
+        end;
+
+        while Anhang2.GruppenListe[i].Spieler.Count = Anhang2.GruppenListe[i].Teilnehmer do
+          Inc(i,sens);
+
+        Anhang2.GruppenListe[i].AddSpieler(spl);
+
+        spieler.Next;
+      end;
+
+    end;
+    spieler.Close;
+
+    RegisterGruppen(sercat, Anhang2.GruppenListe);
+
+  finally
+    spieler.Free;
+  end;
+end;
+
+procedure TTournamentW.RegisterGruppen(const sercat: integer; Gruppen: IList<IAuscheidungGruppe>);
+var
+  grp: IAuscheidungGruppe;
+  sergrp: integer;
+  Keys: IReadOnlyCollection<integer>;
+  key: integer;
+begin
+  for grp in Gruppen do
+  begin
+    sergrp := CreeGroupeQualification(sercat, self.sertrn.Field.AsInteger, grp.GruppeNummer, grp.Teilnehmer);
+    Keys := grp.Spieler.Keys;
+    for key in Keys.Ordered do
+      InsereJoueurDansGroupeQualification(sergrp, grp.Spieler[key].Serjou, sercat, self.sertrn.Field.AsInteger);
   end;
 end;
 
@@ -3634,79 +3690,25 @@ begin
 end;
 
 function TtournamentW.CreeGroupeQualification(const sercat, sertrn,
-  numgrp: integer): integer;
-//var
-//  z: TZReadOnlyQuery;
+  numgrp,teilnehmer: integer): integer;
 begin
-  Result := CreateQualificationGroup(sercat,sertrn,numgrp);
-//  z := getROQuery(pvCnx);
-//  try
-//    z.SQL.Add('SELECT sergrp FROM groupe'
-//             +' WHERE sercat = :sercat'
-//             +'   AND numgrp = :numgrp');
-//    z.Params[0].AsInteger := sercat;
-//    z.Params[1].AsInteger := numgrp;
-//    z.Open;
-//    if (z.Fields[0].IsNull) or (z.Fields[0].AsInteger = 0) then
-//    begin
-//      z.Close;
-//      z.SQL.Clear;
-//      z.SQL.Add('INSERT INTO groupe (sergrp,sercat,numgrp,stagrp,sertrn)'
-//               +' VALUES (:sergrp,:sercat,:numgrp,:stagrp,:sertrn)');
-//      z.Params[0].AsInteger := pvSeq.SerialByName('SEQ_SERGRP');
-//      z.Params[1].AsInteger := sercat;
-//      z.Params[2].AsInteger := numgrp;
-//      z.Params[3].AsInteger := Ord(gsInactive);
-//      z.Params[4].AsInteger := sertrn;
-//      z.ExecSQL;
-//      Result := z.Params[0].AsInteger;
-//    end
-//    else
-//    begin
-//      Result := z.Fields[0].AsInteger;
-//      z.Close;
-//    end;
-//  finally
-//    z.Free;
-//  end;
+  Result := CreateQualificationGroup(sercat,sertrn,numgrp,teilnehmer);
 end;
 
 function TtournamentW.InsereJoueurDansGroupeQualification(const sergrp, serjou,
   sercat, sertrn: integer): integer;
-//var
-//  z: TZReadOnlyQuery;
 begin
   Result := InsertIntoQualificationGroup(sergrp,serjou,sercat,sertrn);
-//  Result := 1;
-//  z := getROQuery(pvCnx);
-//  try
-//    z.SQL.Add('SELECT MAX(numseq) FROM compo_groupe'
-//             +' WHERE sergrp = :sergrp');
-//    z.Params[0].AsInteger := sergrp;
-//    z.Open;
-//    if not(z.Eof) and (z.Fields[0].AsInteger > 0) then
-//      Result := Succ(z.Fields[0].AsInteger);
-//    z.Close;
-//    z.SQL.Clear;
-//    z.SQL.Add('INSERT INTO compo_groupe (sergrp,numseq,serjou,sercat,sertrn)'
-//             +' VALUES (:sergrp,:numseq,:serjou,:sercat,:sertrn)');
-//    z.Params[0].AsInteger := sergrp;
-//    z.Params[1].AsInteger := Result;
-//    z.Params[2].AsInteger := serjou;
-//    z.Params[3].AsInteger := sercat;
-//    z.Params[4].AsInteger := sertrn;
-//    z.ExecSQL;
-//    z.SQL.Clear;
-//    z.SQL.Add('UPDATE prptab SET sergrp = :sergrp'
-//             +' WHERE sertab = :sercat'
-//             +'   AND serjou = :serjou');
-//    z.Params[0].AsInteger := sergrp;
-//    z.Params[1].AsInteger := sercat;
-//    z.Params[2].AsInteger := serjou;
-//    z.ExecSQL;
-//  finally
-//    z.Free;
-//  end;
+end;
+
+procedure TtournamentW.QualificationGroupRefresh(var Message: TMessage);
+var
+  i: Integer;
+begin
+  for i := 0 to GroupsScrollBox.ControlCount-1 do
+    if GroupsScrollBox.Controls[i] is TGroupPanel then
+      if TGroupPanel(GroupsScrollBox.Controls[i]).Sergrp = Message.WParam then
+        TGroupPanel(GroupsScrollBox.Controls[i]).Refresh;
 end;
 
 procedure TtournamentW.DisplayCategoryButtonClick(Sender: TObject);
@@ -3715,11 +3717,10 @@ begin
   ActivateTabSheet(pg, tabSheet);
 end;
 
-procedure TtournamentW.DisplayGroups(const sercat: integer);
+procedure TtournamentW.DisplayTableauActionExecute(Sender: TObject);
 begin
-  ClearGroups;
-  CreateGroupPanels(sercat);
-  ActivateTabSheet(PreparationPageControl, GroupsSheet);
+  inherited;
+  DisplayTableau;
 end;
 
 procedure TtournamentW.DisplayTableau;
@@ -3744,10 +3745,55 @@ begin
   SetGenerateGamesButtonAction;
 end;
 
-procedure TtournamentW.DisplayTableauActionExecute(Sender: TObject);
+procedure TtournamentW.GenerateTabValues(sertab: integer);
+var
+  z: TZReadOnlyQuery;
+  seeds: smallint;
 begin
-  inherited;
-  DisplayTableau;
+  z := nil;
+  try
+    z := getROQuery(pvCnx);
+    if _tab.Active then
+      _tab.Close;
+    _tab.ParamByName('sertab').AsInteger := sertab;
+    _tab.Open;
+    if (_tab.IsEmpty) or ((_cat.FieldByName('phase').AsInteger = Ord(frQualification)) and (_tab.FieldByName('nbrgrp').AsInteger = 0)) then
+    begin
+      z.SQL.Clear;
+      z.SQL.Add('UPDATE OR INSERT INTO tableau (sertab,taille,nbrjou,nbrtds,sertrn,nbrgrp)'
+               +' VALUES (:sertab,:taille,:nbrjou,:nbrtds,:sertrn,0)');
+      z.ParamByName('sertab').AsInteger := sertab;
+      z.ParamByName('nbrjou').AsInteger := _cat.FieldByName('participants').AsInteger;
+      z.ParamByName('sertrn').AsInteger := _sertrn;
+      z.ParamByName('taille').AsInteger := getTailleTableau(_cat.FieldByName('participants').AsInteger);
+
+      { Internes Reglement Nr. 15 : Einzelturniere. Setzung.
+        Die Zahl der gesetzten Spieler beträgt mindestens ein Achtel (1/8) und höchstens ein Viertel (1/4) der
+        Rasterzahl des Turnierbogens (4), wobei jedoch nicht weniger als vier Spieler gesetzt werden, außer bei
+        weniger als acht Teilnehmern, wo nur zwei Spieler gesetzt werden.
+        (4) In einer Kategorie, an der Spieler von mehr als drei verschiedenen Klassementen teilnehmen, muss die
+            Zahl der gesetzten Spieler ein Viertel (1/4) der Rasterzahl des betreffenden Turnierbogens betragen.
+      }
+      seeds := z.ParamByName('taille').AsInteger div 8;
+      if _cat.FieldByName('participants').AsInteger <= 8 then
+        seeds := 2
+      else if seeds < 4 then
+        seeds := 4;
+
+      z.ParamByName('nbrtds').AsInteger := seeds;
+      z.ExecSQL;
+      _tab.Refresh;
+    end;
+  finally
+    freeROQuerys([z]);
+  end;
+end;
+
+procedure TtournamentW.DisplayGroups(const sercat: integer);
+begin
+  ClearGroups;
+  CreateGroupPanels(sercat);
+  ActivateTabSheet(PreparationPageControl, GroupsSheet);
 end;
 
 procedure TtournamentW.ClearGroups;
@@ -3767,7 +3813,8 @@ begin
   z := getROQuery(pvCnx);
   try
     GroupsScrollBox.Visible := False;
-    z.SQL.Add('SELECT nbrgrp,sertrn FROM tableau WHERE sertab = :sercat');
+//    z.SQL.Add('SELECT nbrgrp,sertrn FROM tableau WHERE sertab = :sercat');
+    z.SQL.Add('SELECT MAX(numgrp) FROM groupe WHERE sercat = :sercat');
     z.Params[0].AsInteger := sercat;
     z.Open;
     nbrgrp := z.Fields[0].AsInteger;
@@ -3800,17 +3847,17 @@ begin
   Result.CreateGamesProc := tmUtils15.glCreateGroupGamesProc;
 end;
 
+procedure TtournamentW.PositionneGroupPanel(gp: TGroupPanel; const nbrgrp: integer);
+begin
+  gp.Width := (Self.groupsPanel.ClientWidth - Pred(nbrgrp)) div nbrgrp;
+  gp.Refresh;
+end;
+
 procedure TtournamentW.PhaseGetText(Sender: TField; var Text: string;
   DisplayText: boolean);
 begin
   if not Sender.IsNull then
     Text := Format('%s [%s]',[Sender.AsString,GetEnumName(TypeInfo(TFirstRoundMode), Sender.AsInteger)]);
-end;
-
-procedure TtournamentW.PositionneGroupPanel(gp: TGroupPanel; const nbrgrp: integer);
-begin
-  gp.Width := (Self.groupsPanel.ClientWidth - Pred(nbrgrp)) div nbrgrp;
-  gp.Refresh;
 end;
 
 procedure TtournamentW.SpeedButton1Click(Sender: TObject);
@@ -3850,6 +3897,8 @@ var
   serjou,
   serptn: integer;
   sertab: integer;
+  codcat,
+  orderBy: string;
 label
   close;
 begin
@@ -3867,6 +3916,19 @@ begin
       try
         z.Close;
         z.SQL.Clear;
+        z.SQL.Add('SELECT pardc1 FROM dictionnaire'
+                 +' WHERE cledic = :cledic'
+                 +'   AND coddic = :coddic');
+        z.Params[0].AsString := 'SetzungPriorität';
+        codcat := Self.codcat.Field.AsString;
+        if Pos('-',codcat)> 0 then
+          Delete(codcat,Pos('-',codcat),Length(codcat));
+        z.Params[1].AsString := codcat.Trim;
+        z.Open;
+        if not z.Eof then
+          orderBy := z.Fields[0].AsString;
+        z.Close;
+        z.sql.Clear;
         z.SQL.Add('INSERT INTO prptab (sertab,serprp,serjou,serptn,licence,nomjou'
                   +'  ,seqcls,codclb,libclb,codcls,classement,vrbrgl,numtds,sertrn)'
                  +' VALUES '
@@ -3876,32 +3938,24 @@ begin
         z.ParamByName('sertab').AsInteger := sertab;
         z.ParamByName('sertrn').AsInteger := _tab.FieldByName('sertrn').AsInteger;
 
-//        x.SQL.Add('SELECT  b.serjou,b.licence,b.nomjou,b.codcls,d.numseq+coalesce(e.numseq,0)seqcls,b.topcls,b.topdem,b.vrbrgl ranglescht,a.datinsc,b.codclb,k.libclb'
-//                 +'       ,coalesce(c.serjou,0) serptn,c.licence licptn,c.nomjou nomptn,c.codcls clsptn,c.codclb clbptn,q.libclb libclbptn'
-//                 +'       ,b.vrbrgl+coalesce(c.vrbrgl,0)vrbrgl'
-//                 +' FROM insc a LEFT OUTER JOIN joueur c ON (a.serptn = c.SERJOU AND c.saison = :saison)'
-//                 +'     ,joueur b,classement d LEFT OUTER JOIN classement e ON c.codcls = e.codcls'
-//                 +'     ,club k LEFT OUTER JOIN club q ON c.codclb = q.CODCLB'
-//                 +' WHERE a.sercat = :sercat'
-//                 +'   and a.serjou = b.serjou'
-//                 +'   and b.codcls = d.codcls'
-//                 +'   and b.codclb = k.codclb'
-//                 +'   and b.saison = :saison'
-//                 //+'   and a.statut = ' + IntToStr(Ord(isQualifie))
-//                 +' order by seqcls,vrbrgl,codcls,ranglescht');
         x.SQL.Add('SELECT'
-                     +' 	 j1.LICENCE ,j1.NOMJOU ,j1.CODCLS ,c1.NUMSEQ +coalesce(c2.NUMSEQ,0) seqcls,j1.TOPCLS ,j1.TOPDEM ,a.DATINSC ,j1.CODCLB,cb1.LIBCLB,j1.vrbrgl ranglescht'
-                     +' 	,COALESCE(j2.serjou,0) serptn,j2.LICENCE licptn,j2.NOMJOU nomptn,j2.CODCLS clsptn,j2.CODCLB clbptn,cb2.LIBCLB libclbptn'
-                     +'   ,j1.VRBRGL + coalesce(j2.VRBRGL,0) vrbrgl,a.SERINSC ,j1.SERJOU ,a.STATUT'
+                     +' 	 j1.licence ,j1.nomjou ,j1.codcls ,c1.numseq +COALESCE(c2.numseq,0) seqcls'
+                     +'   ,j1.topcls ,j1.topdem ,a.datinsc ,j1.codclb,cb1.libclb,j1.vrbrgl ranglescht'
+                     +' 	,COALESCE(j2.serjou,0) serptn,j2.licence licptn,j2.nomjou nomptn'
+                     +'   ,j2.codcls clsptn,j2.codclb clbptn,cb2.libclb libclbptn'
+                     +'   ,j1.vrbrgl + COALESCE(j2.vrbrgl,0) vrbrgl,a.serinsc ,j1.serjou ,a.statut'
                      +' 	FROM insc a'
-                     +' 		LEFT JOIN JOUEUR j1 ON a.SERJOU = j1.SERJOU'
-                     +' 			LEFT JOIN CLASSEMENT c1 ON c1.CODCLS =  j1.CODCLS'
-                     +' 			LEFT JOIN club cb1 ON cb1.CODCLB = j1.CODCLB'
-                     +' 		LEFT JOIN joueur j2 ON a.SERPTN = j2.SERJOU'
-                     +' 			LEFT JOIN CLASSEMENT c2 ON c2.CODCLS =  j2.CODCLS'
-                     +' 			LEFT JOIN club cb2 ON cb2.CODCLB = j2.CODCLB'
-                     +' WHERE a.sercat = :sercat'
-                     +' ORDER BY seqcls,vrbrgl,codcls,ranglescht');
+                     +' 		LEFT JOIN joueur j1 ON a.serjou = j1.serjou'
+                     +' 			LEFT JOIN classement c1 ON c1.codcls =  j1.codcls'
+                     +' 			LEFT JOIN club cb1 ON cb1.codclb = j1.codclb'
+                     +' 		LEFT JOIN joueur j2 ON a.serptn = j2.serjou'
+                     +' 			LEFT JOIN classement c2 ON c2.codcls =  j2.codcls'
+                     +' 			LEFT JOIN club cb2 ON cb2.codclb = j2.codclb'
+                     +' WHERE a.sercat = :sercat');
+        if CompareText(OrderBy,'')<>0 then
+          x.SQL.Add(' ORDER BY ' + OrderBy)
+        else
+          x.SQL.Add(' ORDER BY seqcls,vrbrgl,codcls,ranglescht');
 
         x.DataSource := catSource;
         Screen.Cursor := crSQLWait;
@@ -3929,7 +3983,7 @@ begin
           z.ParamByName('codcls').AsString := x.FieldByName('codcls').AsString;
           z.ParamByName('vrbrgl').AsInteger := x.FieldByName('vrbrgl').AsInteger;
           z.ParamByName('numtds').AsInteger := numseq;
-          if _cat.FieldByName('simple').AsInteger = 0 then
+          if _cat.FieldByName('simple').Value = gkDouble then
           begin
             z.ParamByName('licence').AsString := Format('%s-%s',[x.FieldByName('licence').AsString,x.FieldByName('licptn').AsString]);
             z.ParamByName('nomjou').AsString := Format('%s-%s',[x.FieldByName('nomjou').AsString,x.FieldByName('nomptn').AsString]);

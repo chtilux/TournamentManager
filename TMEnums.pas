@@ -13,6 +13,7 @@ type
   TWOResult = (woNull,woLose,woWin);
   TScoreMethod = (smGames,smSets);
   TAreaContentType = (actKo, actGroup);
+  TGameKind = (gkDouble, gkSimple);
 
 implementation
 

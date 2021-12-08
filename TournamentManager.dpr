@@ -51,7 +51,8 @@ uses
   Group in 'Group.pas',
   category in 'category.pas',
   lal_ZQuerysManager in 'lal_ZQuerysManager.pas',
-  lal_ZObject in 'lal_ZObject.pas';
+  lal_ZObject in 'lal_ZObject.pas',
+  tm.AuscheidungsGroup in 'tm.AuscheidungsGroup.pas';
 
 {$R *.res}
 

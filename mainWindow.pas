@@ -1589,7 +1589,68 @@ begin
       RunSQL('ALTER TABLE dictionnaire ALTER COLUMN pardc1 TYPE VARCHAR(100)');
       updateDatabaseVersion(version,version+1);
       cnx.commit;
-    end;
+    end
+    else
+    if version = 18 then
+    begin
+      RunSQL('UPDATE OR INSERT INTO dictionnaire (cledic,coddic,libdic,pardc1)'
+            +Format(' VALUES (%s,%s,%s,%s)',[QuotedStr('SetzungPriorität'),QuotedStr('A1')
+                                           ,QuotedStr('Prioritäten : Art. 5.2.401. der RGLM')
+                                           ,QuotedStr('vrbrgl')]));
+      RunSQL('UPDATE OR INSERT INTO dictionnaire (cledic,coddic,libdic,pardc1)'
+            +Format(' VALUES (%s,%s,%s,%s)',[QuotedStr('SetzungPriorität'),QuotedStr('A2')
+                                           ,QuotedStr('Prioritäten : Art. 5.2.401. der RGLM')
+                                           ,QuotedStr('vrbrgl')]));
+      RunSQL('UPDATE OR INSERT INTO dictionnaire (cledic,coddic,libdic,pardc1)'
+            +Format(' VALUES (%s,%s,%s,%s)',[QuotedStr('SetzungPriorität'),QuotedStr('A3')
+                                           ,QuotedStr('Prioritäten : Art. 5.2.401. der RGLM')
+                                           ,QuotedStr('vrbrgl')]));
+      RunSQL('UPDATE OR INSERT INTO dictionnaire (cledic,coddic,libdic,pardc1)'
+            +Format(' VALUES (%s,%s,%s,%s)',[QuotedStr('SetzungPriorität'),QuotedStr('B1')
+                                           ,QuotedStr('Prioritäten : Art. 5.2.401. der RGLM')
+                                           ,QuotedStr('vrbrgl')]));
+      RunSQL('UPDATE OR INSERT INTO dictionnaire (cledic,coddic,libdic,pardc1)'
+            +Format(' VALUES (%s,%s,%s,%s)',[QuotedStr('SetzungPriorität'),QuotedStr('B2')
+                                           ,QuotedStr('Prioritäten : Art. 5.2.401. der RGLM')
+                                           ,QuotedStr('vrbrgl')]));
+      RunSQL('UPDATE OR INSERT INTO dictionnaire (cledic,coddic,libdic,pardc1)'
+            +Format(' VALUES (%s,%s,%s,%s)',[QuotedStr('SetzungPriorität'),QuotedStr('B3')
+                                           ,QuotedStr('Prioritäten : Art. 5.2.401. der RGLM')
+                                           ,QuotedStr('vrbrgl')]));
+      RunSQL('UPDATE OR INSERT INTO dictionnaire (cledic,coddic,libdic,pardc1)'
+            +Format(' VALUES (%s,%s,%s,%s)',[QuotedStr('SetzungPriorität'),QuotedStr('C1')
+                                           ,QuotedStr('Prioritäten : Art. 5.2.401. der RGLM')
+                                           ,QuotedStr('codcls,vrbrgl')]));
+      RunSQL('UPDATE OR INSERT INTO dictionnaire (cledic,coddic,libdic,pardc1)'
+            +Format(' VALUES (%s,%s,%s,%s)',[QuotedStr('SetzungPriorität'),QuotedStr('C2')
+                                           ,QuotedStr('Prioritäten : Art. 5.2.401. der RGLM')
+                                           ,QuotedStr('codcls,vrbrgl')]));
+      RunSQL('UPDATE OR INSERT INTO dictionnaire (cledic,coddic,libdic,pardc1)'
+            +Format(' VALUES (%s,%s,%s,%s)',[QuotedStr('SetzungPriorität'),QuotedStr('C3')
+                                           ,QuotedStr('Prioritäten : Art. 5.2.401. der RGLM')
+                                           ,QuotedStr('codcls,vrbrgl')]));
+      RunSQL('UPDATE OR INSERT INTO dictionnaire (cledic,coddic,libdic,pardc1)'
+            +Format(' VALUES (%s,%s,%s,%s)',[QuotedStr('SetzungPriorität'),QuotedStr('D1')
+                                           ,QuotedStr('Prioritäten : Art. 5.2.401. der RGLM')
+                                           ,QuotedStr('codcls,vrbrgl')]));
+      RunSQL('UPDATE OR INSERT INTO dictionnaire (cledic,coddic,libdic,pardc1)'
+            +Format(' VALUES (%s,%s,%s,%s)',[QuotedStr('SetzungPriorität'),QuotedStr('D2')
+                                           ,QuotedStr('Prioritäten : Art. 5.2.401. der RGLM')
+                                           ,QuotedStr('codcls,vrbrgl')]));
+      RunSQL('UPDATE OR INSERT INTO dictionnaire (cledic,coddic,libdic,pardc1)'
+            +Format(' VALUES (%s,%s,%s,%s)',[QuotedStr('SetzungPriorität'),QuotedStr('D3')
+                                           ,QuotedStr('Prioritäten : Art. 5.2.401. der RGLM')
+                                           ,QuotedStr('codcls,vrbrgl')]));
+      updateDatabaseVersion(version,version+1);
+      cnx.commit;
+    end
+    else
+    if version = 19 then
+    begin
+      RunSQL('ALTER TABLE groupe ADD teilnehmer SMALLINT');
+      updateDatabaseVersion(version,version+1);
+      cnx.commit;
+    end
   finally
     z.Free;
   end;
