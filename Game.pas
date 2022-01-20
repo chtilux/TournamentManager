@@ -1,9 +1,10 @@
-unit Game;
+Ôªøunit Game;
 
 interface
 
 uses
-  lal_connection, ZDataset, Data.Db, TMEnums, System.Classes, Winapi.Windows;
+  lal_connection, ZDataset, Data.Db, TMEnums, System.Classes, Winapi.Windows,
+  System.Generics.Collections, Spring.Collections;
 
 type
   TPingSet = Record
@@ -70,6 +71,7 @@ type
     function getSertab: integer;
     function getSerTrn: integer;
     function GetFirstRoundMode: TFirstRoundMode;
+    function GruppeKlassementRechnen(const sergrp: integer): IList<TPair<smallint, integer>>;
   public
     constructor Create(AOwner: TComponent; cnx: TLalConnection; const sermtc: integer); reintroduce; overload;
     destructor Destroy; override;
@@ -117,8 +119,8 @@ type
 implementation
 
 uses
-  u_pro_strings, System.SysUtils, lal_dbUtils, tmUtils15, Spring.Collections,
-  Vcl.Dialogs, System.UITypes, Category;
+  u_pro_strings, System.SysUtils, lal_dbUtils, tmUtils15, Vcl.Dialogs,
+  System.UITypes, Category, u_pro_excel;
 
 { TGameResult }
 
@@ -210,10 +212,10 @@ begin
         pvGr.games[numset].score[joueur] := points;
         pvGr.points[joueur] := pvGr.points[joueur] + points;
 
-        { mise ‡ jour du score }
+        { mise √† jour du score }
         if joueur = 2 then
         begin
-          { contrÙle de validitÈ }
+          { contr√¥le de validit√© }
            pt1 := pvGr.games[numset].score[1];
            pt2 := pvGr.games[numset].score[2];
            pvGr.games[numset].isOk := (((pt1 >= 11) and (pt2 <= pt1-2))or((pt2 >= 11) and (pt1 <= pt2-2)));
@@ -248,7 +250,7 @@ begin
       end;
       pvGr.games[numset].score[joueur] := points;
       pvGr.points[joueur] := pvGr.points[joueur] + points;
-      { contrÙle de validitÈ }
+      { contr√¥le de validit√© }
        pt1 := pvGr.games[numset].score[1];
        pt2 := pvGr.games[numset].score[2];
        pvGr.games[numset].isOk := (((pt1 >= 11) and (pt2 <= pt1-2))or((pt2 >= 11) and (pt1 <= pt2-2)));
@@ -768,7 +770,7 @@ label
   write;
 begin
   Result := False;
-  { si 2 joueurs, on vÈrifie si le score est ok }
+  { si 2 joueurs, on v√©rifie si le score est ok }
   if (serjo1 > 0) and (serjo2 > 0) then
   begin
     if pvGr.isOk then
@@ -862,7 +864,7 @@ write:
                 pvMtc.FieldByName('numtbl').AsInteger,
                 getLoserName);
       end;
-        { c'est le lancement de la categorie dans la fenÍtre arena qui modifie
+        { c'est le lancement de la categorie dans la fen√™tre arena qui modifie
           le statut de la categorie en scEnCours }
       updateInsc(pvMtc.FieldByName('vainqueur').AsInteger,rsQualified);
       if (pvMtc.FieldByName('score').AsString <> 'WO') or (pvMtc.FieldByName('level').AsInteger > 2) then
@@ -885,7 +887,7 @@ write:
         z.ParamByName('serjou').AsInteger := pvMtc.FieldByName('vainqueur').AsInteger;
         z.ParamByName('sermtc').AsInteger := i;
         z.ExecSQL;
-        { si tableau handicap et 2 joueurs prÈsents, maj handi1 et handi2 }
+        { si tableau handicap et 2 joueurs pr√©sents, maj handi1 et handi2 }
         if pvHandicap then
         begin
           z.SQL.Clear;
@@ -950,11 +952,14 @@ var
   perdant,
   games,points: integer;
   winner: IList<integer>;
+//  GruppeSpiel: smallint;
+  Klassement: IList<TPair<smallint,integer>>;
+  pair: TPair<Smallint, Integer>;
 begin
   Result := False;
   pvCnx.startTransaction;
   try
-    { vÈrifications }
+    { v√©rifications }
     if (serjo1 > 0) and (serjo2 > 0) and not(pvGr.isOk) then
     begin
       pvCnx.rollback;
@@ -963,6 +968,16 @@ begin
 
     z := getROQuery(pvCnx);
     try
+//      { combien de jouers dans le groupe }
+//      z.SQL.Add('SELECT grp.teilnehmer'
+//               +' FROM groupe grp'
+//               +'   LEFT JOIN match_groupe mgp ON mgp.sergrp = grp.sergrp'
+//               +' WHERE mgp.sermtc = :sermtc');
+//      z.Params[0].AsInteger := pvMtc.ParamByname('sermtc').AsInteger;
+//      z.Open;
+//      GruppeSpiel := z.Fields[0].AsInteger;
+//      z.Close;
+//      z.SQL.Clear;
       { validation du simple }
       z.SQL.Add('UPDATE match'
                +'   SET score = :score'
@@ -990,7 +1005,7 @@ begin
       z.ParamByName('stamtc').AsInteger := Ord(gsOver);
       z.ExecSQL;
 
-      { inscriptions des rÈsultats des joueurs }
+      { inscriptions des r√©sultats des joueurs }
       z.SQL.Clear;
       z.SQL.Add('INSERT INTO groupe_result (sergrp,serjou,seradv,winner,games,points,sercat,sertrn)'
                +' VALUES (:sergrp,:serjou,:seradv,:winner,:games,:points,:sercat,:sertrn)');
@@ -1024,176 +1039,191 @@ begin
       z.Open;
       if z.Fields[0].AsInteger = 0 then
       begin
-        { tous les matchs du groupe sont terminÈs }
+        { tous les matchs du groupe sont termin√©s }
         z.Close;
-        { qualifier le vainqueur }
-        vainqueur := 0;
-        z.SQL.Clear;
-        z.SQL.Add('SELECT serjou, COUNT(*)'
-                 +' FROM groupe_result'
-                 +' WHERE sergrp = :sergrp'
-                 +'   AND winner = 1'
-                 +' GROUP BY 1'
-                 +' HAVING COUNT(*) = 2');
-        z.Params[0].AsInteger := pvMtc.FieldByName('sergrp').AsInteger;
-        z.Open;
-        { cas le plus simple, 1 seul vainqueur avec 2 victoires }
-        if not z.Eof then
-        begin
-          { qualifier le vainqueur }
-          vainqueur := z.Fields[0].AsInteger;
-          z.SQL.Clear;
-          z.SQL.Add('UPDATE prptab'
-                   +' SET is_qualified = :is_qualified'
-                   +' WHERE sergrp = :sergrp'
-                   +'   AND serjou = :serjou');
-          z.Params[0].AsInteger := Ord(rsQualified);
-          z.Params[1].AsInteger := pvMtc.FieldByName('sergrp').AsInteger;
-          z.Params[2].AsInteger := vainqueur;
-          z.ExecSQL;
-          { l'arbitre est le perdant du match entre les 2 autres }
-          z.SQL.Clear;
-          z.SQL.Add('SELECT serjou FROM groupe_result'
-                   +' WHERE sergrp = :sergrp'
-                   +'   AND (serjou <> :vainqueur AND seradv <> :vainqueur)'
-                   +'   AND winner = 0');
-          z.Params[0].AsInteger := pvMtc.FieldByName('sergrp').AsInteger;
-          z.Params[1].AsInteger := vainqueur;
-          z.Open;
-          perdant := z.Fields[0].AsInteger;
-          z.Close;
-          z.SQL.Clear;
-          z.SQL.Add('UPDATE umpires ump'
-                   +'   SET ump.serump = :serjou'
-                   +'      ,ump.umpire = (SELECT jou.nomjou FROM joueur jou WHERE jou.serjou = :perdant)'
-                   +'      ,ump.statbl = :statbl'
-                   +'      ,ump.prvmtc = sermtc'
-                   +'      ,ump.sermtc = NULL'
-                   +' WHERE ump.sertrn = :sertrn'
-                   +'   AND ump.numtbl = :numtbl');
-          z.Params[0].AsInteger := perdant;
-          z.Params[1].AsInteger := perdant;
-          z.Params[2].AsInteger := Ord(pasAvailable);
-          z.Params[3].AsInteger := sertrn;
-          z.Params[4].AsInteger := pvMtc.FieldByName('numtbl').AsInteger;
-          z.ExecSQL;
-        end
-        else
-        begin
-          z.Close;
-          z.SQL.Clear;
-          z.SQL.Add('SELECT serjou'
-//                   +'      ,SUM(winner) AS wins'
-                   +'      ,SUM(games) AS games'
-                   +'      ,SUM(points) AS points'
-                   +' FROM groupe_result'
-                   +' WHERE sergrp = :sergrp'
-                   +' GROUP BY 1'
-                   +' HAVING SUM(winner) = 1'
-                   +' ORDER BY 2 DESC, 3 DESC');
-          z.Params[0].AsInteger := pvMtc.FieldByName('sergrp').AsInteger;
-          z.Open;
-          games := -999;
-          { dÈcompte sur les sets }
-          perdant := 0;
-          winner := TCollections.CreateList<integer>;
-          while not z.Eof do
-          begin
-            if z.Fields[1].AsInteger > games then
-            begin
-              games := z.Fields[1].AsInteger;
-              winner.Clear;
-              winner.Add(z.Fields[0].AsInteger);
-            end
-            else if z.Fields[1].AsInteger = games then
-            begin
-              winner.Add(z.Fields[0].AsInteger);
-            end
-            else
-            begin
-              z.Last;
-              perdant := z.Fields[0].AsInteger;
-              Break;
-            end;
-            z.Next;
-          end;
-          z.Close;
-          if perdant > 0 then
-          begin
-            z.SQL.Clear;
-            z.SQL.Add('UPDATE umpires ump'
-                     +'   SET ump.serump = :serjou'
-                     +'      ,ump.umpire = (SELECT jou.nomjou FROM joueur jou WHERE jou.serjou = :perdant)'
-                     +'      ,ump.statbl = :statbl'
-                     +'      ,ump.prvmtc = sermtc'
-                     +'      ,ump.sermtc = NULL'
-                     +' WHERE ump.sertrn = :sertrn'
-                     +'   AND ump.numtbl = :numtbl');
-            z.Params[0].AsInteger := perdant;
-            z.Params[1].AsInteger := perdant;
-            z.Params[2].AsInteger := Ord(pasAvailable);
-            z.Params[3].AsInteger := sertrn;
-            z.Params[4].AsInteger := pvMtc.FieldByName('numtbl').AsInteger;
-            z.ExecSQL;
-          end;
+        { klassment rechnen }
+        Klassement := GruppeKlassementRechnen(pvMtc.FieldByName('sergrp').AsInteger);
 
-          { dÈcompte sur les points }
-          if winner.Count > 1 then
-          begin
-            winner.Clear;
-            z.SQL.Clear;
-            z.SQL.Add('SELECT serjou'
-  //                   +'      ,SUM(winner) AS wins'
-//                     +'      ,SUM(gr.games) AS games'
-                     +'      ,SUM(points) AS points'
-                     +' FROM groupe_result'
-                     +' WHERE sergrp = :sergrp'
-                     +' GROUP BY 1'
-                     +' HAVING SUM(winner) = 1'
-                     +'   AND SUM(games) = :games'
-                     +' ORDER BY 2 DESC');
-            z.Params[0].AsInteger := pvMtc.FieldByName('sergrp').AsInteger;
-            z.Params[1].AsInteger := games;
-            z.Open;
-            points := -999;
-            while not z.Eof do
-            begin
-              if z.Fields[1].AsInteger > points then
-              begin
-                points := z.Fields[1].AsInteger;
-                winner.Clear;
-                winner.Add(z.Fields[0].AsInteger);
-              end
-              else if z.Fields[1].AsInteger = points then
-              begin
-                winner.Add(z.Fields[0].AsInteger);
-              end
-              else
-                Break;
-              z.Next;
-            end;
-          end;
-          z.Close;
-          if winner.Count = 1 then
-          begin
-            z.SQL.Clear;
-            z.SQL.Add('UPDATE prptab'
-                     +' SET is_qualified = :is_qualified'
-                     +' WHERE sergrp = :sergrp'
-                     +'   AND serjou = :serjou');
-            z.Params[0].AsInteger := Ord(rsQualified);
-            z.Params[1].AsInteger := pvMtc.FieldByName('sergrp').AsInteger;
-            z.Params[2].AsInteger := winner[0];
-            z.ExecSQL;
-          end
-          else
-          begin
-            { ÈgalitÈ parfaite ??? }
-            MessageDlg('Une ÈgalitÈ parfaite sur les matchs gagnÈs, les sets et les points a ÈtÈ calculÈe !'
-                      +#13#10
-                      +'Il faut qualifier le vainqueur et valider l''arbitre manuellement', mtWarning, [mbOk], 0);
-          end;
-        end;
+//        { qualifier le vainqueur }
+//        vainqueur := 0;
+//
+//        { pour les groupes √† 3 joueurs }
+//        z.SQL.Clear;
+//        z.SQL.Add('SELECT serjou, COUNT(*)'
+//                 +' FROM groupe_result'
+//                 +' WHERE sergrp = :sergrp'
+//                 +'   AND winner = 1'
+//                 +' GROUP BY 1'
+//                 +' HAVING COUNT(*) = :ZahlZumGewinn');
+//        z.Params[0].AsInteger := pvMtc.FieldByName('sergrp').AsInteger;
+//        z.Params[1].AsInteger := Pred(GruppeSpiel);
+//        z.Open;
+//        { cas le plus simple, 1 seul vainqueur avec 2 victoires }
+//        if not z.Eof then
+//        begin
+//          { qualifier le vainqueur }
+//          vainqueur := z.Fields[0].AsInteger;
+//          z.SQL.Clear;
+//          z.SQL.Add('UPDATE prptab'
+//                   +' SET is_qualified = :is_qualified'
+//                   +' WHERE sergrp = :sergrp'
+//                   +'   AND serjou = :serjou');
+//          z.Params[0].AsInteger := Ord(rsQualified);
+//          z.Params[1].AsInteger := pvMtc.FieldByName('sergrp').AsInteger;
+//          z.Params[2].AsInteger := vainqueur;
+//          z.ExecSQL;
+//          { l'arbitre est le perdant du match entre les 2 autres }
+//          z.SQL.Clear;
+//          z.SQL.Add('SELECT serjou FROM groupe_result'
+//                   +' WHERE sergrp = :sergrp'
+//                   +'   AND (serjou <> :vainqueur AND seradv <> :vainqueur)'
+//                   +'   AND winner = 0');
+//          z.Params[0].AsInteger := pvMtc.FieldByName('sergrp').AsInteger;
+//          z.Params[1].AsInteger := vainqueur;
+//          z.Open;
+//          perdant := z.Fields[0].AsInteger;
+//          z.Close;
+//          z.SQL.Clear;
+//          z.SQL.Add('UPDATE umpires ump'
+//                   +'   SET ump.serump = :serjou'
+//                   +'      ,ump.umpire = (SELECT jou.nomjou FROM joueur jou WHERE jou.serjou = :perdant)'
+//                   +'      ,ump.statbl = :statbl'
+//                   +'      ,ump.prvmtc = sermtc'
+//                   +'      ,ump.sermtc = NULL'
+//                   +' WHERE ump.sertrn = :sertrn'
+//                   +'   AND ump.numtbl = :numtbl');
+//          z.Params[0].AsInteger := perdant;
+//          z.Params[1].AsInteger := perdant;
+//          z.Params[2].AsInteger := Ord(pasAvailable);
+//          z.Params[3].AsInteger := sertrn;
+//          z.Params[4].AsInteger := pvMtc.FieldByName('numtbl').AsInteger;
+//          z.ExecSQL;
+//        end
+//        else
+//        begin
+//          z.Close;
+//          z.SQL.Clear;
+//          z.SQL.Add('SELECT serjou'
+////                   +'      ,SUM(winner) AS wins'
+//                   +'      ,SUM(games) AS games'
+//                   +'      ,SUM(points) AS points'
+//                   +' FROM groupe_result'
+//                   +' WHERE sergrp = :sergrp'
+//                   +' GROUP BY 1'
+//                   +' HAVING SUM(winner) = :ZahlZumGwinn'
+//                   +' ORDER BY 2 DESC, 3 DESC');
+//          z.Params[0].AsInteger := pvMtc.FieldByName('sergrp').AsInteger;
+//          z.Params[1].AsInteger := GruppeSpiel-2;
+//          z.Open;
+//          games := -999;
+//          { d√©compte sur les sets }
+//          perdant := 0;
+//          winner := TCollections.CreateList<integer>;
+//          while not z.Eof do
+//          begin
+//            if z.Fields[1].AsInteger > games then
+//            begin
+//              games := z.Fields[1].AsInteger;
+//              winner.Clear;
+//              winner.Add(z.Fields[0].AsInteger);
+//            end
+//            else if z.Fields[1].AsInteger = games then
+//            begin
+//              winner.Add(z.Fields[0].AsInteger);
+//            end
+//            else
+//            begin
+//              z.Last;
+//              perdant := z.Fields[0].AsInteger;
+//              Break;
+//            end;
+//            z.Next;
+//          end;
+//          z.Close;
+//          if perdant > 0 then
+//          begin
+//            z.SQL.Clear;
+//            z.SQL.Add('UPDATE umpires ump'
+//                     +'   SET ump.serump = :serjou'
+//                     +'      ,ump.umpire = (SELECT jou.nomjou FROM joueur jou WHERE jou.serjou = :perdant)'
+//                     +'      ,ump.statbl = :statbl'
+//                     +'      ,ump.prvmtc = sermtc'
+//                     +'      ,ump.sermtc = NULL'
+//                     +' WHERE ump.sertrn = :sertrn'
+//                     +'   AND ump.numtbl = :numtbl');
+//            z.Params[0].AsInteger := perdant;
+//            z.Params[1].AsInteger := perdant;
+//            z.Params[2].AsInteger := Ord(pasAvailable);
+//            z.Params[3].AsInteger := sertrn;
+//            z.Params[4].AsInteger := pvMtc.FieldByName('numtbl').AsInteger;
+//            z.ExecSQL;
+//          end;
+//
+//          { d√©compte sur les points }
+//          if winner.Count > 1 then
+//          begin
+//            winner.Clear;
+//            z.SQL.Clear;
+//            z.SQL.Add('SELECT serjou'
+//  //                   +'      ,SUM(winner) AS wins'
+////                     +'      ,SUM(gr.games) AS games'
+//                     +'      ,SUM(points) AS points'
+//                     +' FROM groupe_result'
+//                     +' WHERE sergrp = :sergrp'
+//                     +' GROUP BY 1'
+//                     +' HAVING SUM(winner) = 1'
+//                     +'   AND SUM(games) = :games'
+//                     +' ORDER BY 2 DESC');
+//            z.Params[0].AsInteger := pvMtc.FieldByName('sergrp').AsInteger;
+//            z.Params[1].AsInteger := games;
+//            z.Open;
+//            points := -999;
+//            while not z.Eof do
+//            begin
+//              if z.Fields[1].AsInteger > points then
+//              begin
+//                points := z.Fields[1].AsInteger;
+//                winner.Clear;
+//                winner.Add(z.Fields[0].AsInteger);
+//              end
+//              else if z.Fields[1].AsInteger = points then
+//              begin
+//                winner.Add(z.Fields[0].AsInteger);
+//              end
+//              else
+//                Break;
+//              z.Next;
+//            end;
+//          end;
+//          z.Close;
+//          if winner.Count = 1 then
+//          begin
+//            z.SQL.Clear;
+//            z.SQL.Add('UPDATE prptab'
+//                     +' SET is_qualified = :is_qualified'
+//                     +' WHERE sergrp = :sergrp'
+//                     +'   AND serjou = :serjou');
+//            z.Params[0].AsInteger := Ord(rsQualified);
+//            z.Params[1].AsInteger := pvMtc.FieldByName('sergrp').AsInteger;
+//            z.Params[2].AsInteger := winner[0];
+//            z.ExecSQL;
+//          end
+//          else
+//          begin
+//            { √©galit√© parfaite ??? }
+//            MessageDlg('Une √©galit√© parfaite sur les matchs gagn√©s, les sets et les points a √©t√© calcul√©e !'
+//                      +#13#10
+//                      +'Il faut qualifier le vainqueur et valider l''arbitre manuellement', mtWarning, [mbOk], 0);
+//          end;
+//        end;
+//
+
+        vainqueur := 0; perdant := 0;
+        if Klassement.TryGetFirst(pair) then
+          vainqueur := pair.Value;
+
+        if Klassement.TryGetLast(pair) then
+          perdant := pair.Value;
 
         z.SQL.Clear;
         z.SQL.Add('UPDATE groupe'
@@ -1228,7 +1258,7 @@ begin
 //        z.Open;
 //        if z.Fields[0].AsInteger = 0 then
 //        begin
-//          { tous les groupes sont terminÈs, passer la catÈgorie en phase KO }
+//          { tous les groupes sont termin√©s, passer la cat√©gorie en phase KO }
 //          z.Close;
 //          z.SQL.Clear;
 //          z.SQL.Add('UPDATE categories SET phase = :phase'
@@ -1239,7 +1269,7 @@ begin
 //          z.Params[2].AsInteger := sertab;
 //          z.ExecSQL;
 //        end;
-      end;  { tous les matchs du groupe sont terminÈs }
+      end;  { tous les matchs du groupe sont termin√©s }
 
       if z.Active then z.Close;
     finally
@@ -1253,6 +1283,80 @@ begin
   except
     pvCnx.rollback;
     raise;
+  end;
+end;
+
+function TGame.GruppeKlassementRechnen(const sergrp: integer): IList<TPair<smallint, integer>>;
+var
+  pair: TPair<smallint, integer>;
+  z: TZReadOnlyQuery;
+  Teilnehmer: Integer;
+  xls: Variant;
+  wkb: Variant;
+  sht: Variant;
+  col: Integer;
+  row: Integer;
+begin
+  Result := TCollections.CreateList<TPair<smallint, integer>>;
+  z := getROQuery(pvCnx);
+  try
+    z.SQL.Add('SELECT teilnehmer FROM groupe'
+             +' WHERE sergrp = :sergrp');
+    z.Params[0].AsInteger := sergrp;
+    z.Open;
+    Teilnehmer := z.Fields[0].AsInteger;
+    z.Close;
+
+    {5.1. Den Teilnehmern in einer Spielgruppe werden wie folgt Punkte zugeteilt bzw. angerechnet:
+          ‚ñ™ in einer MK: f√ºr jedes gewonnene MSp drei (3) Punkte, f√ºr jedes MSp mit unentschiedenem Ausgang
+          ( d.h. mit der gleichen Anzahl an gewonnenen Spielen f√ºr jede der beiden an diesem MSp beteiligten
+          Mannschaften ) zwei (2) Punkte, f√ºr jedes verlorene MSp ein (1) Punkt und f√ºr jedes Mannschafts-Forfait
+          null (0) Punkte;
+          ‚ñ™ in einer IK: f√ºr jedes gewonnene Spiel ( Einzel bzw. Doppel ) zwei (2) Punkte, f√ºr jedes verlorene Spiel
+          ein (1) Punkt und f√ºr jedes Spiel zu dem der Teilnehmer nicht angetreten ist (= 'Forfait') oder bei dem er
+          disqualifiziert worden ist, null (0) Punkte.
+          Die Tabelle einer Spielgruppe wird erstellt, indem f√ºr jeden Teilnehmer dieser Spielgruppe die von diesem
+          Teilnehmer - gem√§√ü den Bestimmungen des vorherigen Absatzes - erzielten Punkte summiert werden.
+          ( siehe diesbez√ºglich auch Art. 0.06.).
+     6.1. Bei Gleichstand ( = bei gleicher Punktezahl) von zwei oder mehr Teilnehmern in der Abschlusstabelle einer
+          Spielgruppe entscheidet zwischen diesen gleichklassierten Teilnehmern der direkte Vergleich, d.h. das
+          Gesamtresultat der Ergebnisse aus all jenen Spielen bzw. MSp welche die gleichklassierten Teilnehmer in
+          der betreffenden Kompetition - je nach Fall, in der betreffenden Saison oder Teilrunde - gegeneinander
+          ausgetragen haben und die f√ºr die Erstellung der Tabelle der betreffenden Spielgruppe ma√ügebend sind
+          bzw. waren, und zwar in der folgenden Reihenfolge: zuerst das bessere (= h√∂here) Spielverh√§ltnis (51H) (51J)
+          ,
+          dann das bessere (= h√∂here) Satzverh√§ltnis (51J)
+          , soweit dies f√ºr die Festlegung der Platzreihenfolge (noch)
+          notwendig ist.
+    }
+    z.SQL.Clear;
+    z.SQL.Add('SELECT numseq,serjou'
+             +' FROM compo_groupe'
+             +' WHERE sergrp = :sergrp'
+             +' ORDER BY numseq');
+    z.Params[0].AsInteger := sergrp;
+    z.Open;
+    CreateExcelWorkbook(xls, wkb, sht, True);
+    row := 1; col := 1;
+    sht.Cells[row, col] := '';
+    while not z.Eof do
+    begin
+      Inc(row);
+      sht.Cells[row,col] := z.FieldByName('numseq').AsInteger;
+      sht.Cells[row,row] := 0;
+      z.Next;
+    end;
+    z.First;
+    row := 1; col := 1;
+    while not z.Eof do
+    begin
+      Inc(col);
+      sht.Cells[row,col] := z.FieldByName('numseq').AsInteger;
+      z.Next;
+    end;
+    z.Close;
+  finally
+    z.Free;
   end;
 end;
 

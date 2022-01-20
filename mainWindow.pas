@@ -336,9 +336,10 @@ procedure TmainW.FormDestroy(Sender: TObject);
 var
   Filename: TFileName;
 begin
-  Filename := ChangeFileExt(Application.ExeName,'.settings');
   glSettings.Write;
   glSettings.Free;
+  Filename := ChangeFileExt(Application.ExeName,'.settings');
+  glSettingsValues.SaveToFile(Filename);
 end;
 
 procedure TmainW.SaveSettingsToFile(const SettingsValues: TStrings; const Filename: TFilename);

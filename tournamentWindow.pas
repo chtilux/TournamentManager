@@ -411,13 +411,13 @@ type
     procedure beforeInsert(Dataset: TDataset);
     procedure build(tablo: TTablo; aleatoire: boolean);
     procedure BuildGroups(const sercat: integer);
-    procedure CalculeNumeroGroupe(var numgrp: integer; const nbrgrp: integer; var sens: TSens);
+//    procedure CalculeNumeroGroupe(var numgrp: integer; const nbrgrp: integer; var sens: TSens);
     procedure checkMatchesLevel(const sertab: integer; const level: integer);
     procedure ClearGroups;
     function GetQualificationsGroupStatusCount(const sercat: integer; const qgs: TQualificationGroupStatus): integer;
     procedure closeDatasets;
     procedure colorsChanged(var Message: TMessage); message wm_colorsChanged;
-    procedure ComposeGroupes(const sercat: integer; const Anhang2: TAnhang2);
+//    procedure ComposeGroupes(const sercat: integer; const Anhang2: TAnhang2);
     procedure ComposeGroupesAnhang2(const sercat: integer; var Anhang2: TAnhang2);
     procedure CreateGroupPanels(const sercat: integer);
     procedure dbGridColumns(grid: TDBGrid);
@@ -442,7 +442,7 @@ type
     procedure openMatches;
     procedure PhaseGetText(Sender: TField; var Text: string; DisplayText: boolean);
     procedure PositionneGroupPanel(gp: TGroupPanel; const nbrgrp: integer);
-    procedure QualifieTDS(const sercat: integer);
+//    procedure QualifieTDS(const sercat: integer);
     procedure SetGenerateGamesButtonAction;
 //    procedure _stacat(const sercat: integer; const stacat: TCategorysStatus);
     procedure updateTableau(sertab: integer);
@@ -458,6 +458,8 @@ type
       const organisateur: string): TFilename;
     procedure RegisterGruppen(const sercat: integer;
       Gruppen: IList<IAuscheidungGruppe>);
+    procedure SaveAnhang2(const sercat: integer; Anhang: TAnhang2);
+    procedure ResetAnhangsFromDB(const sercat: integer);
 
   public
     { Déclarations publiques }
@@ -3494,6 +3496,7 @@ begin
       anhang2 := GetHanhang2(sercat);
       pvAnhangs.AddOrSetValue(sercat, anhang2);
       ComposeGroupesAnhang2(sercat, anhang2);
+      SaveAnhang2(sercat, anhang2);
 //      {$ifdef debug}
 //      pvCnx.rollback;
 //      Exit;
@@ -3514,51 +3517,51 @@ begin
   end;
 end;
 
-procedure TtournamentW.QualifieTDS(const sercat: integer);
-begin
-  QualifySeeds(sercat);
-end;
+//procedure TtournamentW.QualifieTDS(const sercat: integer);
+//begin
+//  QualifySeeds(sercat);
+//end;
 
-procedure TtournamentW.ComposeGroupes(const sercat: integer; const Anhang2: TAnhang2);
-var
-  sel{,z}: TZReadOnlyQuery;
-  sertrn,
-  nbrgrp, numgrp,
-  sergrp: integer;
-  sens: TSens;
-begin
-  sel := nil;
-  try
-    nbrgrp := _tab.FieldByName('nbrgrp').AsInteger;
-    sertrn := _tab.FieldByName('sertrn').AsInteger;
-
-    sel := getROQuery(pvCnx);
-    sel.SQL.Add('SELECT numtds,serjou,licence,nomjou,codclb,libclb,classement'
-               +' FROM prptab'
-               +' WHERE sertab = :sercat'
-               +'   AND is_qualified = :is_qualified'
-               +'   AND serjou > 0'
-               +' ORDER BY numtds');
-    sel.Params[0].AsInteger := sercat;
-    sel.Params[1].AsInteger := Ord(rsDisqualified);
-    sel.Open;
-    numgrp := 0;
-    sens := ssCroissant;
-    while not sel.Eof do
-    begin
-      CalculeNumeroGroupe(numgrp,nbrgrp,sens);
-      sergrp := CreeGroupeQualification(sercat,sertrn,numgrp,3);
-      InsereJoueurDansGroupeQualification(sergrp,sel.FieldByName('serjou').AsInteger,sercat,sertrn);
-      sel.Next;
-      Application.ProcessMessages;
-    end;
-    sel.Close;
-  finally
-    sel.Free;
-//    z.Free;
-  end;
-end;
-
+//procedure TtournamentW.ComposeGroupes(const sercat: integer; const Anhang2: TAnhang2);
+//var
+//  sel{,z}: TZReadOnlyQuery;
+//  sertrn,
+//  nbrgrp, numgrp,
+//  sergrp: integer;
+//  sens: TSens;
+//begin
+//  sel := nil;
+//  try
+//    nbrgrp := _tab.FieldByName('nbrgrp').AsInteger;
+//    sertrn := _tab.FieldByName('sertrn').AsInteger;
+//
+//    sel := getROQuery(pvCnx);
+//    sel.SQL.Add('SELECT numtds,serjou,licence,nomjou,codclb,libclb,classement'
+//               +' FROM prptab'
+//               +' WHERE sertab = :sercat'
+//               +'   AND is_qualified = :is_qualified'
+//               +'   AND serjou > 0'
+//               +' ORDER BY numtds');
+//    sel.Params[0].AsInteger := sercat;
+//    sel.Params[1].AsInteger := Ord(rsDisqualified);
+//    sel.Open;
+//    numgrp := 0;
+//    sens := ssCroissant;
+//    while not sel.Eof do
+//    begin
+//      CalculeNumeroGroupe(numgrp,nbrgrp,sens);
+//      sergrp := CreeGroupeQualification(sercat,sertrn,numgrp,3);
+//      InsereJoueurDansGroupeQualification(sergrp,sel.FieldByName('serjou').AsInteger,sercat,sertrn);
+//      sel.Next;
+//      Application.ProcessMessages;
+//    end;
+//    sel.Close;
+//  finally
+//    sel.Free;
+////    z.Free;
+//  end;
+//end;
+//
 procedure TtournamentW.ComposeGroupesAnhang2(const sercat: integer;
   var Anhang2: TAnhang2);
 
@@ -3576,8 +3579,8 @@ var
 //  groupList: IList<IAuscheidungGruppe>;
   i,j,nummer,sens: Integer;
   spl: TSpieler;
-  keys: IReadOnlyCollection<integer>;
-  key: integer;
+//  keys: IReadOnlyCollection<integer>;
+//  key: integer;
 begin
   {
     Sélection des joueurs qualifiés. Ils sont déjà triés selon l'IR15 lors de la
@@ -3650,6 +3653,11 @@ begin
   end;
 end;
 
+procedure TTournamentW.SaveAnhang2(const sercat: integer; Anhang: TAnhang2);
+begin
+
+end;
+
 procedure TTournamentW.RegisterGruppen(const sercat: integer; Gruppen: IList<IAuscheidungGruppe>);
 var
   grp: IAuscheidungGruppe;
@@ -3666,29 +3674,29 @@ begin
   end;
 end;
 
-procedure TtournamentW.CalculeNumeroGroupe(var numgrp: integer;
-  const nbrgrp: integer; var sens: TSens);
-begin
-  case sens of
-    ssCroissant: begin
-      Inc(numgrp);
-      if numgrp > nbrgrp then
-      begin
-        Dec(numgrp);
-        sens := ssDecroissant;
-      end;
-    end;
-    ssDecroissant: begin
-      Dec(numgrp);
-      if numgrp = 0 then
-      begin
-        Inc(numgrp);
-        sens := ssCroissant;
-      end;
-    end;
-  end;
-end;
-
+//procedure TtournamentW.CalculeNumeroGroupe(var numgrp: integer;
+//  const nbrgrp: integer; var sens: TSens);
+//begin
+//  case sens of
+//    ssCroissant: begin
+//      Inc(numgrp);
+//      if numgrp > nbrgrp then
+//      begin
+//        Dec(numgrp);
+//        sens := ssDecroissant;
+//      end;
+//    end;
+//    ssDecroissant: begin
+//      Dec(numgrp);
+//      if numgrp = 0 then
+//      begin
+//        Inc(numgrp);
+//        sens := ssCroissant;
+//      end;
+//    end;
+//  end;
+//end;
+//
 function TtournamentW.CreeGroupeQualification(const sercat, sertrn,
   numgrp,teilnehmer: integer): integer;
 begin
@@ -3876,6 +3884,7 @@ begin
     if swp.ShowModal = mrOk then
     begin
       RefreshGroups;
+      ResetAnhangsFromDB(catSource.DataSet.FieldByName('sercat').AsInteger);
     end;
   finally
     swp.Free;
@@ -3888,6 +3897,36 @@ var
 begin
   for i := 0 to GroupsScrollBox.ControlCount-1 do
     TGroupPanel(GroupsScrollBox.Controls[i]).Refresh;
+end;
+
+procedure TTournamentW.ResetAnhangsFromDB(const sercat: integer);
+var
+  i: Integer;
+  gp: TGroupPanel;
+  sergrp: integer;
+  z: TZReadOnlyQuery;
+begin
+  z := getROQuery(pvCnx);
+  try
+    z.SQL.Add('SELECT numtds,serjou,licence,nomjou,codclb,libclb,classement'
+             +' FROM prptab'
+             +' WHERE sertab = :sercat'
+             +'   AND serjou > :serjou');
+    z.Params[0].AsInteger := sercat;
+
+    for i := 0 to GroupsScrollBox.ControlCount-1 do
+    begin
+      if GroupsScrollBox.Controls[i] is TGroupPanel then
+      begin
+        gp := TGroupPanel(GroupsScrollBox.Controls[i]);
+        sergrp := gp.Sergrp;
+
+
+      end;
+    end;
+  finally
+    z.Free;
+  end;
 end;
 
 procedure TtournamentW.PrepareActionExecute(Sender: TObject);
@@ -5046,7 +5085,7 @@ begin
       if _tab.FindField('nbrgrp') <> nil then
       begin
         GenerateGroupGamesAction.Enabled := (stacat = csGroup) and (GetQualificationsGroupStatusCount(cat.FieldByName('sercat').AsInteger, qgsValidated) = _tab.FieldByName('nbrgrp').AsInteger);
-        Swap2PlayersAction.Enabled := (stacat = csGroup) and not(GenerateGroupGamesAction.Enabled);
+        Swap2PlayersAction.Enabled := (stacat = csGroup) and (pvAnhangs.Count > 0);
       end
       else
       begin

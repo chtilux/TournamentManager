@@ -812,8 +812,15 @@ begin
               Result.HauptRunde.Players := Result.Auscheidung.Groups[0].NumberOfGroups + Result.Auscheidung.Groups[1].NumberOfGroups;
         end;
       end;
-      if Result.HauptRunde.Players <= 3 then
+      if Result.HauptRunde.Players < 10 then
+      begin
         Result.HauptRunde.System := frQualification;
+        if Result.HauptRunde.Players > 5 then
+        begin
+          Result.HauptRunde.Group.NumberOfPlayers := Result.HauptRunde.Players;
+          Result.HauptRunde.Group.NumberOfGroups := 1;
+        end;
+      end;
     end;
   end;
 end;
@@ -3105,7 +3112,7 @@ initialization
       contnr := TObjectList.Create;
       try
         grp := getROQuery(lcCnx, contnr);
-        grp.SQL.Add('SELECT sergrp,sercat,numgrp,sertrn'
+        grp.SQL.Add('SELECT sergrp,sercat,numgrp,sertrn,teilnehmer'
                    +' FROM groupe'
                    +' WHERE sergrp = :sergrp');
 
@@ -3152,14 +3159,38 @@ initialization
             insmg.ParamByName('sercat').AsInteger := insm.ParamByName('sertab').AsInteger;
             insmg.ParamByName('sertrn').AsInteger := insm.ParamByName('sertrn').AsInteger;
 
-            { les rencontres des groupes de 3 sont 1-3, 2-3, 1-2 }
             nummtc := 0;
-            nummtc := AddGame(1,3);
-            nummtc := AddGame(2,3);
-            nummtc := AddGame(1,2);
+            case grp.FieldByName('teilnehmer').AsInteger of
+              2 : begin
+                nummtc := AddGame(1,2);
+              end;
+              3 : begin
+                nummtc := AddGame(3,1);
+                nummtc := AddGame(2,3);
+                nummtc := AddGame(1,2);
+              end;
+              4 : begin
+                nummtc := AddGame(2,4);
+                nummtc := AddGame(3,1);
+                nummtc := AddGame(1,4);
+                nummtc := AddGame(2,3);
+                nummtc := AddGame(4,3);
+                nummtc := AddGame(1,2);
+              end;
+              5 : begin
+                nummtc := AddGame(4,2);
+                nummtc := AddGame(5,1);
+                nummtc := AddGame(2,5);
+                nummtc := AddGame(3,4);
+                nummtc := AddGame(5,3);
+                nummtc := AddGame(1,2);
+                nummtc := AddGame(3,1);
+                nummtc := AddGame(4,5);
+                nummtc := AddGame(1,4);
+                nummtc := AddGame(2,3);
+              end;
+            end;
 
-            if nummtc < 3 then
-              raise Exception.CreateFmt('Seulement %d matchs sur 3 ont été générés !',[nummtc]);
             lcCnx.commit;
 
             { update of categorie.stacat }
