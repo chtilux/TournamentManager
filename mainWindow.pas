@@ -102,8 +102,6 @@ type
     procedure LoadSettingsFromText(var Values: TStrings);
     function getSettingsValue(const setting, default: string): string;
     procedure setSettingsValue(const setting, value: string);
-    procedure SaveSettingsToFile(const SettingsValues: TStrings;
-      const Filename: TFilename);
   public
     { Déclarations publiques }
     property cnx: TLalConnection read pvCnx;
@@ -336,15 +334,10 @@ procedure TmainW.FormDestroy(Sender: TObject);
 var
   Filename: TFileName;
 begin
-  glSettings.Write;
+//  glSettings.Write;
   glSettings.Free;
   Filename := ChangeFileExt(Application.ExeName,'.settings');
   glSettingsValues.SaveToFile(Filename);
-end;
-
-procedure TmainW.SaveSettingsToFile(const SettingsValues: TStrings; const Filename: TFilename);
-begin
-  SettingsValues.SaveToFile(Filename);
 end;
 
 procedure TmainW.SaveToFileActionExecute(Sender: TObject);
@@ -1651,6 +1644,69 @@ begin
       RunSQL('ALTER TABLE groupe ADD teilnehmer SMALLINT');
       updateDatabaseVersion(version,version+1);
       cnx.commit;
+    end
+    else if version = 20 then
+    begin
+      if not domainExists(cnx, 'd_categorie') then
+        RunSQL('CREATE DOMAIN d_categorie VARCHAR(16)');
+      if not domainExists(cnx, 'd_classement') then
+        RunSQL('CREATE DOMAIN d_classement CHAR(2)');
+      if not domainExists(cnx, 'd_code_club') then
+        RunSQL('CREATE DOMAIN d_code_club CHAR(2)');
+      if not domainExists(cnx, 'd_nom') then
+        RunSQL('CREATE DOMAIN d_nom VARCHAR(64)');
+      if not domainExists(cnx, 'd_serial') then
+        RunSQL('CREATE DOMAIN d_serial INTEGER');
+      RunSQL('CREATE TABLE inscriptions ('
+            +'  serinsc d_serial NOT NULL'
+            +' ,tournoi d_serial NOT NULL'
+            +' ,categorie d_categorie NOT NULL'
+            +' ,code_club d_code_club NOT NULL'
+            +' ,nom_joueur d_nom NOT NULL'
+            +' ,nom_club d_nom NOT NULL'
+            +' ,classement d_classement NOT NULL'
+            +' ,vbrgl SMALLINT NOT NULL'
+            +' ,points DECIMAL(4,1) NOT NULL'
+            +' ,top_classement d_classement NOT NULL'
+            +' ,top_classement_demi_saison d_classement NOT NULL'
+            +' ,CONSTRAINT pk_inscriptions PRIMARY KEY (SERINSC)'
+            +')');
+      RunSQL('ALTER TABLE inscriptions ADD CONSTRAINT fk_inscriptions_tournoi FOREIGN KEY (tournoi) REFERENCES tournoi'
+            +'        USING INDEX i01_inscriptions');
+      RunSQL('CREATE OR ALTER TRIGGER trg_inscriptions_ai FOR inscriptions'
+            +' ACTIVE BEFORE INSERT'
+            +' POSITION 0'
+            +' AS BEGIN'
+            +'   IF (new.serinsc = 0)'
+            +'      THEN new.serinsc = GEN_ID(INSCRIPTION,1);'
+            +' END');
+      updateDatabaseVersion(version,version+1);
+      cnx.commit;
+    end
+    else
+    if version = 21 then
+    begin
+//      RunSQL('CREATE OR ALTER TRIGGER trg_tournoi_before_delete FOR tournoi'
+//            +'  ACTIVE BEFORE DELETE'
+//            +'  POSITION 0'
+//            +'  AS'
+//            +'  DECLARE VARIABLE tableName AS VARCHAR(32);'
+//            +'  BEGIN'
+//            +'  /* Supprimer tous les records des tables qui ont une foreign key sur tournoi */'
+//            +'    FOR'
+//            +'    SELECT DISTINCT "RDB$RELATION_NAME"  FROM RDB$RELATION_CONSTRAINTS rrc3'
+//            +'      WHERE rrc3."RDB$CONSTRAINT_NAME" in (SELECT "RDB$CONSTRAINT_NAME"'
+//            +'          FROM RDB$REF_CONSTRAINTS rrc2 WHERE rrc2.RDB$CONST_NAME_UQ =(SELECT "RDB$CONSTRAINT_NAME"'
+//            +'                 FROM RDB$RELATION_CONSTRAINTS rrc WHERE rrc."RDB$RELATION_NAME" = :tableName'
+//            +'                   AND rrc."RDB$CONSTRAINT_TYPE" = ''PRIMARY KEY''))'
+//            +'      INTO :tableName'
+//            +'    DO'
+//            +'    BEGIN'
+//            +'      SUSPEND;'
+//            +'    END'
+//            +'  END');
+//      updateDatabaseVersion(version,version+1);
+//      cnx.commit;
     end
   finally
     z.Free;

@@ -2360,55 +2360,94 @@ end;
 procedure deleteTournament(const sertrn: integer);
 var
   z: TZReadOnlyQuery;
+  tables: TStrings;
+  i: integer;
 begin
   z := getROQuery(lcCnx);
   try
     Screen.Cursor := crSQLWait;
     lcCnx.startTransaction;
     try
-//      Deleted by trigger on table match
+      z.SQL.Add('SELECT DISTINCT "RDB$RELATION_NAME"  FROM RDB$RELATION_CONSTRAINTS rrc3'
+               +'  WHERE rrc3."RDB$CONSTRAINT_NAME" in (SELECT "RDB$CONSTRAINT_NAME"'
+               +'      FROM RDB$REF_CONSTRAINTS rrc2 WHERE rrc2.RDB$CONST_NAME_UQ =(SELECT "RDB$CONSTRAINT_NAME"'
+               +'            FROM RDB$RELATION_CONSTRAINTS rrc WHERE rrc."RDB$RELATION_NAME" = ''TOURNOI'''
+               +'            AND rrc."RDB$CONSTRAINT_TYPE" = ''PRIMARY KEY''))');
+      z.Open;
+      tables := TStringList.Create;
+      try
+        while not z.Eof do
+        begin
+          tables.Add(z.Fields[0].AsString);
+          z.Next;
+        end;
+        z.Close;
+        for i := 0 to tables.Count-1 do
+        begin
+          z.SQL.Clear;
+          z.SQL.Add(Format('DELETE FROM %s WHERE sertrn = %d',[tables[i],sertrn]));
+          try
+            z.ExecSQL;
+          except
+            z.SQL.Clear;
+            z.SQL.Add(Format('DELETE FROM %s WHERE tournoi = %d',[tables[i],sertrn]));
+            try
+              z.ExecSQL;
+            except
+            end;
+          end;
+        end;
+        z.sql.Clear;
+        z.SQL.Add(Format('DELETE FROM %s WHERE sertrn = %d',['TOURNOI',sertrn]));
+        try
+          z.ExecSQL;
+        except
+        end;
+      finally
+        tables.Free;
+      end;
+
+//      z.SQL.Add(Format('delete from %s where tournoi = %d',['inscriptions',sertrn]));
+//      z.ExecSQL;
+//      z.SQL.Clear;
+//      z.SQL.Add(Format('delete from %s where sertrn = %d',['compo_groupe',sertrn]));
+//      z.ExecSQL;
 //      z.SQL.Clear;
 //      z.SQL.Add(Format('delete from %s where sertrn = %d',['match_groupe',sertrn]));
 //      z.ExecSQL;
 //      z.SQL.Clear;
-      z.SQL.Add(Format('delete from %s where sertrn = %d',['compo_groupe',sertrn]));
-      z.ExecSQL;
-      z.SQL.Clear;
-      z.SQL.Add(Format('delete from %s where sertrn = %d',['match_groupe',sertrn]));
-      z.ExecSQL;
-      z.SQL.Clear;
-      z.SQL.Add(Format('delete from %s where sertrn = %d',['groupe',sertrn]));
-      z.ExecSQL;
-      z.SQL.Clear;
-      z.SQL.Add(Format('delete from %s where sertrn = %d',['groupe_result',sertrn]));
-      z.ExecSQL;
-      z.SQL.Clear;
-      z.SQL.Add(Format('delete from %s where sertrn = %d',['insc',sertrn]));
-      z.ExecSQL;
-      z.SQL.Clear;
-      z.SQL.Add(Format('delete from %s where sertrn = %d',['classements',sertrn]));
-      z.ExecSQL;
-      z.SQL.Clear;
-      z.SQL.Add(Format('delete from %s where sertrn = %d',['categories',sertrn]));
-      z.ExecSQL;
-      z.SQL.Clear;
-      z.SQL.Add(Format('delete from %s where sertrn = %d',['match',sertrn]));
-      z.ExecSQL;
-      z.SQL.Clear;
-      z.SQL.Add(Format('delete from %s where sertrn = %d',['prptab',sertrn]));
-      z.ExecSQL;
-      z.SQL.Clear;
-      z.SQL.Add(Format('delete from %s where sertrn = %d',['tablo',sertrn]));
-      z.ExecSQL;
-      z.SQL.Clear;
-      z.SQL.Add(Format('delete from %s where sertrn = %d',['tableau',sertrn]));
-      z.ExecSQL;
-      z.SQL.Clear;
-      z.SQL.Add(Format('delete from %s where sertrn = %d',['umpires',sertrn]));
-      z.ExecSQL;
-      z.SQL.Clear;
-      z.SQL.Add(Format('delete from %s where sertrn = %d',['tournoi',sertrn]));
-      z.ExecSQL;
+//      z.SQL.Add(Format('delete from %s where sertrn = %d',['groupe',sertrn]));
+//      z.ExecSQL;
+//      z.SQL.Clear;
+//      z.SQL.Add(Format('delete from %s where sertrn = %d',['groupe_result',sertrn]));
+//      z.ExecSQL;
+//      z.SQL.Clear;
+//      z.SQL.Add(Format('delete from %s where sertrn = %d',['insc',sertrn]));
+//      z.ExecSQL;
+//      z.SQL.Clear;
+//      z.SQL.Add(Format('delete from %s where sertrn = %d',['classements',sertrn]));
+//      z.ExecSQL;
+//      z.SQL.Clear;
+//      z.SQL.Add(Format('delete from %s where sertrn = %d',['categories',sertrn]));
+//      z.ExecSQL;
+//      z.SQL.Clear;
+//      z.SQL.Add(Format('delete from %s where sertrn = %d',['match',sertrn]));
+//      z.ExecSQL;
+//      z.SQL.Clear;
+//      z.SQL.Add(Format('delete from %s where sertrn = %d',['prptab',sertrn]));
+//      z.ExecSQL;
+//      z.SQL.Clear;
+//      z.SQL.Add(Format('delete from %s where sertrn = %d',['tablo',sertrn]));
+//      z.ExecSQL;
+//      z.SQL.Clear;
+//      z.SQL.Add(Format('delete from %s where sertrn = %d',['tableau',sertrn]));
+//      z.ExecSQL;
+//      z.SQL.Clear;
+//      z.SQL.Add(Format('delete from %s where sertrn = %d',['umpires',sertrn]));
+//      z.ExecSQL;
+//      z.SQL.Clear;
+//      z.SQL.Add(Format('delete from %s where sertrn = %d',['tournoi',sertrn]));
+//      z.ExecSQL;
       { TODO : Delete all the records by trigger on table tournoi }
       lcCnx.commit;
     except
