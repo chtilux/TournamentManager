@@ -1645,6 +1645,7 @@ begin
       updateDatabaseVersion(version,version+1);
       cnx.commit;
     end
+<<<<<<< Updated upstream
     else if version = 20 then
     begin
       if not domainExists(cnx, 'd_categorie') then
