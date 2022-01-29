@@ -1648,30 +1648,32 @@ begin
 <<<<<<< Updated upstream
     else if version = 20 then
     begin
-      if not domainExists(cnx, 'd_categorie') then
-        RunSQL('CREATE DOMAIN d_categorie VARCHAR(16)');
-      if not domainExists(cnx, 'd_classement') then
-        RunSQL('CREATE DOMAIN d_classement CHAR(2)');
-      if not domainExists(cnx, 'd_code_club') then
-        RunSQL('CREATE DOMAIN d_code_club CHAR(2)');
-      if not domainExists(cnx, 'd_nom') then
-        RunSQL('CREATE DOMAIN d_nom VARCHAR(64)');
       if not domainExists(cnx, 'd_serial') then
-        RunSQL('CREATE DOMAIN d_serial INTEGER');
-      RunSQL('CREATE TABLE inscriptions ('
-            +'  serinsc d_serial NOT NULL'
-            +' ,tournoi d_serial NOT NULL'
-            +' ,categorie d_categorie NOT NULL'
-            +' ,code_club d_code_club NOT NULL'
-            +' ,nom_joueur d_nom NOT NULL'
-            +' ,nom_club d_nom NOT NULL'
-            +' ,classement d_classement NOT NULL'
-            +' ,vbrgl SMALLINT NOT NULL'
-            +' ,points DECIMAL(4,1) NOT NULL'
-            +' ,top_classement d_classement NOT NULL'
-            +' ,top_classement_demi_saison d_classement NOT NULL'
-            +' ,CONSTRAINT pk_inscriptions PRIMARY KEY (SERINSC)'
-            +')');
+        RunSQL('CREATE DOMAIN d_serial AS INTEGER');
+      if not domainExists(cnx, 'd_categorie') then
+      RunSQL('CREATE DOMAIN d_categorie AS VARCHAR(16)');
+      if not domainExists(cnx, 'd_code_club') then
+      RunSQL('CREATE DOMAIN d_code_club AS CHAR(2)');
+      if not domainExists(cnx, 'd_nom') then
+      RunSQL('CREATE DOMAIN d_nom AS VARCHAR(64) CHARACTER SET ISO8859_1 COLLATE FR_FR');
+      if not domainExists(cnx, 'd_classement') then
+      RunSQL('CREATE DOMAIN d_classement AS CHAR(2)');
+
+      if not tableExists(cnx, 'inscriptions') then
+        RunSQL('CREATE TABLE inscriptions ('
+              +'  serinsc d_serial NOT NULL'
+              +' ,tournoi d_serial NOT NULL'
+              +' ,categorie d_categorie NOT NULL'
+              +' ,code_club d_code_club NOT NULL'
+              +' ,nom_joueur d_nom NOT NULL'
+              +' ,nom_club d_nom NOT NULL'
+              +' ,classement d_classement NOT NULL'
+              +' ,vbrgl SMALLINT NOT NULL'
+              +' ,points DECIMAL(4,1) NOT NULL'
+              +' ,top_classement d_classement NOT NULL'
+              +' ,top_classement_demi_saison d_classement NOT NULL'
+              +' ,CONSTRAINT pk_inscriptions PRIMARY KEY (SERINSC)'
+              +')');
       RunSQL('ALTER TABLE inscriptions ADD CONSTRAINT fk_inscriptions_tournoi FOREIGN KEY (tournoi) REFERENCES tournoi'
             +'        USING INDEX i01_inscriptions');
       RunSQL('CREATE OR ALTER TRIGGER trg_inscriptions_ai FOR inscriptions'
@@ -1709,40 +1711,6 @@ begin
 //      updateDatabaseVersion(version,version+1);
 //      cnx.commit;
     end
-=======
-    else
-    if version = 20 then
-    begin
-      if not domainExists(cnx, 'd_serial') then
-        RunSQL('CREATE DOMAIN d_serial AS INTEGER');
-      if not domainExists(cnx, 'd_categorie') then
-      RunSQL('CREATE DOMAIN d_categorie AS VARCHAR(16)');
-      if not domainExists(cnx, 'd_code_club') then
-      RunSQL('CREATE DOMAIN d_code_club AS CHAR(2)');
-      if not domainExists(cnx, 'd_nom') then
-      RunSQL('CREATE DOMAIN d_nom AS VARCHAR(64) CHARACTER SET ISO8859_1 COLLATE FR_FR');
-      if not domainExists(cnx, 'd_classement') then
-      RunSQL('CREATE DOMAIN d_classement AS CHAR(2)');
-
-      if not tableExists(cnx, 'inscriptions') then
-        RunSQL('CREATE TABLE inscriptions ('
-              +'   serinsc d_serial NOT NULL'
-              +'  ,tournoi d_serial NOT NULL'
-              +'  ,categorie d_categorie NOT NULL'
-              +'  ,nom_joueur d_nom NOT NULL'
-              +'  ,nom_club d_nom NOT NULL'
-              +'  ,classement d_classement NOT NULL'
-              +'  ,vbrgl SMALLINT NOT NULL'
-              +'  ,points DECIMAL(4,1) NOT NULL'
-              +'  ,top_classement d_classement NOT NULL'
-              +'  ,top_classement_demi_saison d_classement NOT NULL'
-              +'  ,CONSTRAINT pk_inscriptions PRIMARY KEY (serinsc)'
-              +'  ,CONSTRAINT fk_inscriptions_tournoi FOREIGN KEY (tournoi) REFERENCES tournoi (sertrn)'
-              +')');
-      updateDatabaseVersion(version,version+1);
-      cnx.commit;
-    end
->>>>>>> Stashed changes
   finally
     z.Free;
   end;
