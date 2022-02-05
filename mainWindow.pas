@@ -1645,7 +1645,6 @@ begin
       updateDatabaseVersion(version,version+1);
       cnx.commit;
     end
-<<<<<<< Updated upstream
     else if version = 20 then
     begin
       if not domainExists(cnx, 'd_serial') then
@@ -1680,7 +1679,7 @@ begin
             +' ACTIVE BEFORE INSERT'
             +' POSITION 0'
             +' AS BEGIN'
-            +'   IF (new.serinsc = 0)'
+            +'   IF ((new.serinsc = 0) OR (new.serinsc IS NULL))'
             +'      THEN new.serinsc = GEN_ID(INSCRIPTION,1);'
             +' END');
       updateDatabaseVersion(version,version+1);
